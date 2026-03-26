@@ -51,7 +51,7 @@ class Workspace:
                 if not line.startswith("\t") and not line.startswith(" "):
                     break
                 # Line like: \t//depot/project/... //client/...
-                m = re.match(r"\s+(//[^/]+/[^/]+)/\.\.\.", line)
+                m = re.match(r"\s+(//[^\s]+)/\.\.\.", line)
                 if m:
                     return m.group(1)
         # Fallback: use first two components of any depot path we can find
