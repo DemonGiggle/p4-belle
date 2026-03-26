@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
+from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4
 from p5.workspace import any_to_rel, local_to_depot
 
@@ -21,7 +22,7 @@ _REV_RE     = re.compile(r"^(.+?)#(\d+) - is sync'd at #(\d+)")
 
 
 @click.command()
-@click.argument("path", default=None, required=False)
+@click.argument("path", default=None, required=False, shell_complete=complete_depot_path)
 @click.option("-f", "--force", is_flag=True, help="Force resync")
 @click.option("-n", "--dry-run", "dry_run", is_flag=True, help="Preview only")
 @click.option("-a", "--all", "sync_all", is_flag=True, help="Sync entire depot (//...)")

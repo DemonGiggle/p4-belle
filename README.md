@@ -32,6 +32,30 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+## Shell Completion
+
+Enable tab completion for commands, file arguments, and changelist numbers:
+
+```sh
+# Bash
+echo 'eval "$(_P5_COMPLETE=bash_source p5)"' >> ~/.bashrc
+
+# Zsh
+echo 'eval "$(_P5_COMPLETE=zsh_source p5)"' >> ~/.zshrc
+
+# Fish
+echo '_P5_COMPLETE=fish_source p5 | source' >> ~/.config/fish/config.fish
+```
+
+Or run `p5 completion` to get auto-detected instructions for your current shell.
+
+Completions supported:
+- `p5 diff [file]` — completes opened files
+- `p5 delete [file]` — completes opened files
+- `p5 filelog [file]` — completes depot paths
+- `p5 sync [path]` — completes depot paths
+- `p5 diff -c`, `p5 delete -c`, `p5 submit -c`, `p5 change` — completes pending CLs
+
 ## Commands
 
 ### `p5 status`

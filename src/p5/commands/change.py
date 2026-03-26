@@ -4,13 +4,14 @@ from __future__ import annotations
 import click
 from rich.console import Console
 
+from p5.completion import complete_pending_cls
 from p5.p4 import P4Error, run_p4
 
 console = Console()
 
 
 @click.command()
-@click.argument("cl_number", default=None, required=False)
+@click.argument("cl_number", default=None, required=False, shell_complete=complete_pending_cls)
 @click.option("-d", "--delete", "do_delete", is_flag=True, help="Delete an empty changelist")
 def change_cmd(cl_number: str | None, do_delete: bool) -> None:
     """Create a new changelist or edit an existing one.

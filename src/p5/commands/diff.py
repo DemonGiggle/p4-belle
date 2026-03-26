@@ -55,9 +55,13 @@ def _render_diff(raw: str) -> None:
             console.print(line)
 
 
+from p5.completion import complete_opened_files, complete_pending_cls  # noqa: E402
+
+
 @click.command()
-@click.argument("files", nargs=-1)
-@click.option("-c", "--cl", default=None, help="Diff files in a specific changelist")
+@click.argument("files", nargs=-1, shell_complete=complete_opened_files)
+@click.option("-c", "--cl", default=None, help="Diff files in a specific changelist",
+              shell_complete=complete_pending_cls)
 def diff_cmd(files: tuple[str, ...], cl: str | None) -> None:
     """Show colored diff of opened files."""
     args = ["diff", "-du"]

@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
+from p5.completion import complete_pending_cls
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.workspace import any_to_rel
 
@@ -44,7 +45,8 @@ def _show_pending(cl: str | None) -> bool:
 
 
 @click.command()
-@click.option("-c", "--cl", default=None, help="Submit a specific numbered changelist")
+@click.option("-c", "--cl", default=None, help="Submit a specific numbered changelist",
+              shell_complete=complete_pending_cls)
 @click.option("-d", "--description", default=None, help="Changelist description (skips editor)")
 @click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
 def submit_cmd(cl: str | None, description: str | None, no_confirm: bool) -> None:

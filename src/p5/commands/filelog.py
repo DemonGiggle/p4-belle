@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
+from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
 from p5.workspace import any_to_rel, local_to_depot
 
@@ -13,7 +14,7 @@ console = Console()
 
 
 @click.command()
-@click.argument("file")
+@click.argument("file", shell_complete=complete_depot_path)
 @click.option("-n", "--max-revisions", "max_rev", default=20, show_default=True,
               help="Max number of revisions to show")
 def filelog_cmd(file: str, max_rev: int) -> None:
