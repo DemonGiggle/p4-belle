@@ -334,12 +334,16 @@ class ChangesApp(App):
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def action_cursor_down(self) -> None:
+        if self._filtering:
+            return
         if self.detail_open:
             self.query_one("#detail-view", DiffView).scroll_down(3)
         else:
             self.query_one("#list-view", ListView).action_cursor_down()
 
     def action_cursor_up(self) -> None:
+        if self._filtering:
+            return
         if self.detail_open:
             self.query_one("#detail-view", DiffView).scroll_up(3)
         else:
