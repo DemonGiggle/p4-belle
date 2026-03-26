@@ -13,6 +13,10 @@ DIFF_DEL    = "bright_red"
 DIFF_HUNK   = "cyan"
 DIFF_HEADER = "bold white"
 
+# Diff line background tints (subtle, lets syntax colors show through)
+DIFF_ADD_BG = "on #1a3a1a"   # dark green background for added lines
+DIFF_DEL_BG = "on #3a1a1a"   # dark red background for removed lines
+
 # Changelist / log colors
 CL_NUM  = "bold blue"
 DATE    = "dim"

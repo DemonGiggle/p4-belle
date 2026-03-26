@@ -263,11 +263,17 @@ def _colorize_diff(raw: str) -> list[str]:
 
         elif line.startswith("+"):
             highlighted = _highlight(line[1:], lexer)
-            out.append(f"[bold {T.DIFF_ADD}]+[/bold {T.DIFF_ADD}]{highlighted}")
+            out.append(
+                f"[bold {T.DIFF_ADD} {T.DIFF_ADD_BG}]+[/bold {T.DIFF_ADD} {T.DIFF_ADD_BG}]"
+                f"[{T.DIFF_ADD_BG}]{highlighted}[/{T.DIFF_ADD_BG}]"
+            )
 
         elif line.startswith("-"):
             highlighted = _highlight(line[1:], lexer)
-            out.append(f"[bold {T.DIFF_DEL}]-[/bold {T.DIFF_DEL}]{highlighted}")
+            out.append(
+                f"[bold {T.DIFF_DEL} {T.DIFF_DEL_BG}]-[/bold {T.DIFF_DEL} {T.DIFF_DEL_BG}]"
+                f"[{T.DIFF_DEL_BG}]{highlighted}[/{T.DIFF_DEL_BG}]"
+            )
 
         else:
             # Context line — syntax-highlight but no diff color
