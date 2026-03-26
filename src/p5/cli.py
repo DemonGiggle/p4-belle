@@ -23,6 +23,7 @@ from p5.commands.change  import change_cmd   # noqa: E402
 from p5.commands.submit  import submit_cmd   # noqa: E402
 from p5.commands.changes import changes_cmd  # noqa: E402
 from p5.commands.filelog import filelog_cmd  # noqa: E402
+from p5.commands.ws      import ws_cmd       # noqa: E402
 
 main.add_command(status_cmd,  "status")
 main.add_command(diff_cmd,    "diff")
@@ -34,3 +35,4 @@ main.add_command(change_cmd,  "change")
 main.add_command(submit_cmd,  "submit")
 main.add_command(changes_cmd, "changes")
 main.add_command(filelog_cmd, "filelog")
+main.add_command(ws_cmd,      "ws")

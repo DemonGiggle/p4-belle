@@ -17,6 +17,7 @@ p5 edit src/auth/login.cpp
 - **Relative paths** everywhere — input and output strip the depot/workspace root automatically
 - **Colored output** — file states, diffs, and logs styled like `git`
 - **Interactive `changes` browser** — navigate changelists with `j/k`, expand diffs with `Enter`
+- **Interactive workspace selector** (`p5 ws`) — list all client workspaces and switch with `Enter`
 - Zero configuration — depot root is detected automatically from `p4 info`
 
 ## Requirements
@@ -163,6 +164,36 @@ p5 submit             # submit default changelist
 p5 submit -c 123450   # submit a specific CL
 p5 submit -d "Fix login bug"  # provide description inline
 p5 submit -y          # skip confirmation prompt
+```
+
+### `p5 ws`
+
+Interactive workspace selector — lists all your Perforce client workspaces and lets you switch with `Enter`.
+
+```
+ p5 ws
+ ──────────────────────────────────────────────────────────
+ ◆ gigo-main          (current)
+   /home/gigo/workspace/main
+   2026-03-25   build-server   Main integration workspace
+
+   gigo-feature-x
+   /home/gigo/workspace/feature-x
+   2026-03-20   laptop         Feature branch workspace
+
+   gigo-release
+   /home/gigo/workspace/release
+   2026-03-10   build-server   Release stabilization
+ ──────────────────────────────────────────────────────────
+ [j/k: navigate]  [Enter: switch]  [/: filter]  [q: quit]
+```
+
+Switching runs `p4 set P4CLIENT=<name>`, which persists in `~/.p4enviro` and applies to all shells immediately.
+
+```sh
+p5 ws                  # interactive TUI
+p5 ws --no-tui         # plain table output
+p5 ws -u alice         # list workspaces for another user
 ```
 
 ## Color Reference
