@@ -1,0 +1,2 @@
+[console_scripts]
+p5 = p5.cli:main
