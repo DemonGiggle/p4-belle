@@ -22,7 +22,7 @@ A Perforce CLI with git-like UX — relative paths, colored output, and interact
 ```sh
 git clone <this-repo>
 cd p4-belle
-python3.9 -m pip install -e .
+python3 -m pip install -e .
 ```
 
 The `p5` command will be installed to `~/.local/bin/p5`. Make sure that directory is on your `PATH`:
