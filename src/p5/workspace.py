@@ -73,8 +73,10 @@ class Workspace:
         except ValueError:
             # Not under client root — return as-is and let p4 complain
             return path
-        depot = self.depot_prefix + "/" + str(rel).replace(os.sep, "/")
-        return depot
+        rel_str = str(rel).replace(os.sep, "/")
+        if rel_str == ".":
+            return self.depot_prefix
+        return self.depot_prefix + "/" + rel_str
 
     def depot_to_rel(self, depot_path: str) -> str:
         """Convert a depot path to a relative path from client root."""

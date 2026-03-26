@@ -11,7 +11,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel, local_to_depot
+from p5.workspace import any_to_rel
 
 console = Console()
 
@@ -41,14 +41,19 @@ def _render_file_line(action: str, rel_path: str) -> Text:
 def status_cmd(path: str | None, show_all: bool) -> None:
     """Show pending changes in the current directory (like git status)."""
     if show_all:
-        depot_path = "//..."
+        p4_path = "//..."
     elif path is not None:
-        depot_path = local_to_depot(path) + "/..."
+        # Accept depot paths (//...) or local paths; append /... for directories
+        if path.startswith("//"):
+            p4_path = path.rstrip("/") + "/..."
+        else:
+            p4_path = os.path.abspath(path).rstrip("/") + "/..."
     else:
-        depot_path = local_to_depot(os.getcwd()) + "/..."
+        # Use the local filesystem path directly — avoids depot path mapping issues
+        p4_path = os.getcwd().rstrip("/") + "/..."
 
     try:
-        opened = run_p4_tagged(["opened", depot_path])
+        opened = run_p4_tagged(["opened", p4_path])
     except P4Error as e:
         # "file(s) not opened on this client" → nothing open
         if "not opened" in str(e).lower():
@@ -58,7 +63,7 @@ def status_cmd(path: str | None, show_all: bool) -> None:
 
     # Also get reconcile / untracked status
     try:
-        reconcile = run_p4_tagged(["reconcile", "-n", "-e", "-a", "-d", depot_path])
+        reconcile = run_p4_tagged(["reconcile", "-n", "-e", "-a", "-d", p4_path])
     except P4Error:
         reconcile = []
 
