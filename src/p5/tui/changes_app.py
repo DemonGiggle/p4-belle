@@ -492,6 +492,8 @@ class ChangesApp(App):
     @on(ListView.Selected)
     def on_list_selected(self, event: ListView.Selected) -> None:
         """ListView fires this when Enter is pressed on a highlighted item."""
+        if self._filtering:
+            return
         if isinstance(event.item, ChangeItem):
             self._open_detail(event.item.rec)
 
