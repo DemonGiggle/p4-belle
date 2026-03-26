@@ -51,21 +51,22 @@ _COMPLETION_PROFILES = {
 
 @main.command("completion")
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default=None, required=False)
-def completion_cmd(shell: str | None) -> None:
-    """Print shell completion setup instructions.
+@click.option("--install", is_flag=True, help="Append completion line to your shell profile")
+def completion_cmd(shell: str | None, install: bool) -> None:
+    """Print shell completion setup instructions (or install with --install).
 
-    Run the printed line (or add it to your shell profile) to enable tab
-    completion for all p5 commands and arguments.
+    Auto-detects your shell from $SHELL, or pass bash/zsh/fish explicitly.
 
     \b
     Examples:
-      p5 completion bash   # bash instructions
-      p5 completion zsh    # zsh instructions
-      p5 completion fish   # fish instructions
+      p5 completion            # show instructions for current shell
+      p5 completion zsh        # show instructions for zsh
+      p5 completion --install  # append to ~/.bashrc (or ~/.zshrc etc.)
     """
     import os
+    from pathlib import Path
+
     if shell is None:
-        # Auto-detect from $SHELL
         shell_bin = os.environ.get("SHELL", "")
         for s in ("bash", "zsh", "fish"):
             if s in shell_bin:
@@ -75,11 +76,23 @@ def completion_cmd(shell: str | None) -> None:
             shell = "bash"
 
     script  = _COMPLETION_SCRIPTS[shell]
-    profile = _COMPLETION_PROFILES[shell]
+    profile = Path(_COMPLETION_PROFILES[shell]).expanduser()
+
+    if install:
+        marker = "_P5_COMPLETE"
+        # Check if already installed
+        if profile.exists() and marker in profile.read_text():
+            console.print(f"[dim]Already installed in {profile}[/dim]")
+            return
+        with profile.open("a") as f:
+            f.write(f"\n# p5 shell completion\n{script}\n")
+        console.print(f"[green]✓[/green] Appended to [cyan]{profile}[/cyan]")
+        console.print(f"[dim]Run: source {profile}[/dim]")
+        return
 
     console.print(f"\n[bold]Enable p5 tab completion for {shell}[/bold]\n")
     console.print(f"Add this line to [cyan]{profile}[/cyan]:\n")
     console.print(f"  [green]{script}[/green]\n")
-    console.print(f"Or run it now in your current shell:\n")
-    console.print(f"  [dim]{script}[/dim]\n")
-    console.print("[dim]Then restart your shell or run: source " + profile + "[/dim]\n")
+    console.print(f"Or install automatically:\n")
+    console.print(f"  [dim]p5 completion {shell} --install[/dim]\n")
+    console.print(f"[dim]Then restart your shell or run: source {profile}[/dim]\n")

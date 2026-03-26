@@ -34,20 +34,24 @@ source ~/.bashrc
 
 ## Shell Completion
 
-Enable tab completion for commands, file arguments, and changelist numbers:
+The quickest way to install completion for your current shell:
 
 ```sh
-# Bash
-echo 'eval "$(_P5_COMPLETE=bash_source p5)"' >> ~/.bashrc
-
-# Zsh
-echo 'eval "$(_P5_COMPLETE=zsh_source p5)"' >> ~/.zshrc
-
-# Fish
-echo '_P5_COMPLETE=fish_source p5 | source' >> ~/.config/fish/config.fish
+p5 completion --install
 ```
 
-Or run `p5 completion` to get auto-detected instructions for your current shell.
+This appends the completion hook to your shell profile (`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`) and skips if already installed. Then reload:
+
+```sh
+source ~/.bashrc   # or ~/.zshrc, etc.
+```
+
+For a specific shell, or to see the line before installing:
+
+```sh
+p5 completion zsh            # show the line to add
+p5 completion zsh --install  # install it automatically
+```
 
 Completions supported:
 - `p5 diff [file]` — completes opened files
