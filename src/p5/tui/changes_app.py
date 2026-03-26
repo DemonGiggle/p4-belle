@@ -349,6 +349,7 @@ class ChangesApp(App):
         self._filtered: list[ChangeRecord] = []
         self._filter_buf: str = ""
         self._filtering: bool = False
+        self._filter_just_committed: bool = False
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -477,6 +478,7 @@ class ChangesApp(App):
 
     def _commit_filter(self) -> None:
         self._filtering = False
+        self._filter_just_committed = True  # block the ListView.Selected already in the queue
         fb = self.query_one("#filter-bar", Static)
         fb.remove_class("active")
         if self._filter_buf:
@@ -499,6 +501,10 @@ class ChangesApp(App):
     def on_list_selected(self, event: ListView.Selected) -> None:
         """ListView fires this when Enter is pressed on a highlighted item."""
         if self._filtering:
+            return
+        if self._filter_just_committed:
+            # Enter committed the filter; the resulting Selected event is spurious.
+            self._filter_just_committed = False
             return
         if isinstance(event.item, ChangeItem):
             self._open_detail(event.item.rec)
