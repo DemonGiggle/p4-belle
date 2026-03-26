@@ -8,8 +8,9 @@ A Perforce CLI with git-like UX — relative paths, colored output, and interact
 
 - **Relative paths** everywhere — output strips the depot/workspace root automatically
 - **Colored output** — file states, diffs, and logs styled like `git`
-- **Interactive `changes` browser** — navigate changelists with `j/k`, expand diffs with `Enter`
+- **Interactive `changes` browser** — navigate changelists with `j/k`, expand syntax-highlighted diffs with `Enter`
 - **Interactive workspace selector** (`p5 ws`) — list all client workspaces and switch with `Enter`
+- **Tab completion** — file paths, depot paths, and changelist numbers for bash, zsh, and fish
 - Zero configuration — depot root is detected automatically from `p4 info`
 
 ## Requirements
@@ -86,19 +87,21 @@ Local changes not opened in p4:
 
 ### `p5 diff [files...]`
 
-Colored unified diff of opened files — like `git diff`. Code content is syntax-highlighted per language.
+Colored unified diff of opened files — like `git diff`.
 
 ```
 diff src/auth/login.cpp  (#41 → working copy)
 ──────────────────────────────────────────────
 @@ -10,6 +10,8 @@ int authenticate(User& u) {
      validate(u);
-+    log_attempt(u.name);      ← green background + syntax highlight
--    old_log(u);               ← red background + syntax highlight
++    log_attempt(u.name);      ← green background
+-    old_log(u);               ← red background
      return check_token(u);
 ```
 
 Options: `-c CL` to diff a specific changelist.
+
+> For syntax-highlighted diffs, use `p5 changes` and press `Enter` to expand a changelist.
 
 ### `p5 delete <files...>`
 
@@ -226,6 +229,19 @@ p5 ws                  # interactive TUI
 p5 ws --no-tui         # plain table output
 p5 ws -u alice         # list workspaces for another user
 ```
+
+### `p5 completion`
+
+Print shell completion setup instructions, or install directly with `--install`.
+
+```sh
+p5 completion                # show instructions for current shell (auto-detected)
+p5 completion zsh            # show instructions for zsh
+p5 completion --install      # append hook to ~/.bashrc (or ~/.zshrc / fish config)
+p5 completion zsh --install  # install for zsh specifically
+```
+
+Running `--install` is idempotent — it checks for an existing hook before writing and prints the `source` command to activate immediately.
 
 ## Color Reference
 

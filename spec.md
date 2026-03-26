@@ -20,6 +20,7 @@
    - [filelog](#filelog)
    - [changes (TUI)](#changes-tui)
    - [ws (TUI)](#ws-tui)
+   - [completion](#completion)
 
 ---
 
@@ -44,7 +45,7 @@
 ```sh
 git clone <repo>
 cd p4-belle
-python3.9 -m pip install -e .
+python3 -m pip install -e .
 ```
 
 This installs `p5` to `~/.local/bin/p5`. Add to PATH if needed:
@@ -67,15 +68,14 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 ```
 src/p5/
-├── cli.py               — click group, registers all commands
+├── cli.py               — click group, registers all commands (incl. completion)
 ├── p4.py                — subprocess wrapper (run_p4, run_p4_tagged, P4Error)
 ├── workspace.py         — path resolution (depot ↔ local ↔ relative)
 ├── theme.py             — shared color/style constants
+├── completion.py        — shell completion helpers (opened files, CLs, depot paths)
 ├── commands/
 │   ├── status.py
 │   ├── diff.py
-│   ├── edit.py
-│   ├── add.py
 │   ├── delete.py
 │   ├── sync.py
 │   ├── change.py
@@ -586,10 +586,49 @@ Current workspace determined from `p4 info` → `clientName` field. User determi
 
 ---
 
+---
+
+### `completion`
+
+Print shell completion setup instructions or install the hook directly.
+
+```
+p5 completion [SHELL] [--install]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `SHELL` | auto-detected from `$SHELL` | `bash`, `zsh`, or `fish` |
+| `--install` | off | Append the completion hook to the shell profile and exit |
+
+**Without `--install`**: prints the line to add to the shell profile and a reminder to `source` it.
+
+**With `--install`**:
+1. Resolves the profile path (`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`)
+2. Checks for `_P5_COMPLETE` in the file; skips if already present
+3. Appends a `# p5 shell completion` comment block and the hook line
+4. Prints the `source` command to activate immediately
+
+**Implementation**: Uses Click's built-in `_P5_COMPLETE=<shell>_source` mechanism. Completers in `completion.py` are wrapped with `@_safe` which silently returns `[]` on any exception (e.g. when not inside a Perforce workspace).
+
+**Completers registered per command**:
+
+| Command | Argument | Completer |
+|---|---|---|
+| `diff` | `FILES` | `complete_opened_files` |
+| `diff` | `-c` | `complete_pending_cls` |
+| `delete` | `FILES` | `complete_opened_files` |
+| `delete` | `-c` | `complete_pending_cls` |
+| `filelog` | `FILE` | `complete_depot_path` |
+| `sync` | `PATH` | `complete_depot_path` |
+| `change` | `CL_NUMBER` | `complete_pending_cls` |
+| `submit` | `-c` | `complete_pending_cls` |
+
+---
+
 ## Known Limitations / Future Work
 
 - `p5 change` and `p5 submit` (without `-d`) shell out to `p4` directly for editor support; they do not use the Rich/Textual UI.
-- `p5 changes -c CL` option (start from a specific CL) is parsed but not yet passed to the TUI.
-- `p5 diff` does not support syntax highlighting (only the `changes` detail view does).
+- `p5 diff` does not support syntax highlighting — only the `p5 changes` detail view does (via Pygments).
 - No support for `p4 shelve` / `p4 unshelve` yet.
 - No support for streams or task streams.
