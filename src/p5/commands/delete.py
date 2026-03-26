@@ -1,4 +1,4 @@
-"""p5 delete — mark files for delete."""
+"""p5 delete — mark files for delete, with confirmation."""
 from __future__ import annotations
 
 import click
@@ -15,8 +15,22 @@ console = Console()
 @click.command()
 @click.argument("files", nargs=-1, required=True)
 @click.option("-c", "--cl", default=None, help="Add to changelist")
-def delete_cmd(files: tuple[str, ...], cl: str | None) -> None:
-    """Mark file(s) for delete."""
+@click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
+def delete_cmd(files: tuple[str, ...], cl: str | None, no_confirm: bool) -> None:
+    """Mark file(s) for delete (with confirmation)."""
+    rel_paths = [any_to_rel(local_to_depot(f)) for f in files]
+
+    if not no_confirm:
+        console.print(Text("Files to be deleted:", style=theme.SECTION))
+        for p in rel_paths:
+            t = Text()
+            t.append("  D  ", style=f"bold {theme.DELETED}")
+            t.append(p)
+            console.print(t)
+        console.print()
+        click.confirm("Mark these files for delete?", abort=True)
+        console.print()
+
     args = ["delete"]
     if cl:
         args += ["-c", cl]

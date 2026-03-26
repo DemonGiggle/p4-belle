@@ -1,20 +1,12 @@
 # p5
 
-A Perforce CLI with git-like UX — relative paths, colored output, and an interactive changelist browser.
+A Perforce CLI with git-like UX — relative paths, colored output, and interactive terminal UIs.
 
 `p4` speaks in absolute depot paths. `p5` speaks like a human.
 
-```
-# instead of:
-p4 edit //depot/project/src/auth/login.cpp
-
-# you write:
-p5 edit src/auth/login.cpp
-```
-
 ## Features
 
-- **Relative paths** everywhere — input and output strip the depot/workspace root automatically
+- **Relative paths** everywhere — output strips the depot/workspace root automatically
 - **Colored output** — file states, diffs, and logs styled like `git`
 - **Interactive `changes` browser** — navigate changelists with `j/k`, expand diffs with `Enter`
 - **Interactive workspace selector** (`p5 ws`) — list all client workspaces and switch with `Enter`
@@ -52,55 +44,72 @@ Changes to be submitted (default changelist):
   A  src/auth/token.h
 
 Other pending changelists:
-  CL 123450  "Refactor network layer"
+  CL 123450
     M  src/net/socket.cpp
 
 Local changes not opened in p4:
   ?  src/scratch.cpp
+
+  use p4 edit <file> to open for edit, p4 add <file> to mark new files,
+  p5 delete <file> to mark for delete
 ```
+
+`p5 status` intentionally does not wrap `p4 edit` or `p4 add` — those commands add little value as wrappers and are faster to type directly. `p5 delete` is the exception because it adds a confirmation prompt.
 
 ### `p5 diff [files...]`
 
-Colored unified diff of opened files — like `git diff`.
+Colored unified diff of opened files — like `git diff`. Code content is syntax-highlighted per language.
 
 ```
 diff src/auth/login.cpp  (#41 → working copy)
 ──────────────────────────────────────────────
 @@ -10,6 +10,8 @@ int authenticate(User& u) {
      validate(u);
-+    log_attempt(u.name);
--    old_log(u);
++    log_attempt(u.name);      ← green background + syntax highlight
+-    old_log(u);               ← red background + syntax highlight
      return check_token(u);
 ```
 
-### `p5 edit / add / delete <files...>`
+Options: `-c CL` to diff a specific changelist.
 
-Open files for edit, add, or delete. Accepts relative paths or globs.
+### `p5 delete <files...>`
 
-```sh
-p5 edit src/auth/login.cpp
-p5 add  src/auth/new_feature.h
-p5 delete src/auth/old_helper.cpp
+Mark file(s) for delete, with a confirmation prompt.
 
-# target a specific changelist
-p5 edit -c 123450 src/net/socket.cpp
 ```
+Files to be deleted:
+  D  src/auth/old_helper.cpp
+  D  src/auth/legacy.h
+
+Mark these files for delete? [y/N]: y
+
+  deleted  src/auth/old_helper.cpp
+  deleted  src/auth/legacy.h
+```
+
+Options: `-c CL` to target a specific changelist, `-y` to skip confirmation.
 
 ### `p5 sync [path]`
 
-Sync workspace to head with a clean summary.
+Sync the current directory (or a specific path) to head, with a clean summary.
 
 ```
-Syncing to head...
+Syncing src/auth to head...
 
   updated   src/auth/login.cpp     #42
-  added     src/net/retry.cpp      #1
-  deleted   src/net/old_proto.cpp
+  added     src/auth/retry.cpp     #1
+  deleted   src/auth/old.cpp
 
 2 updated, 1 added, 1 deleted
 ```
 
-Options: `-f` force resync, `-n` dry run.
+```sh
+p5 sync             # sync current directory recursively
+p5 sync src/auth    # sync a specific subdirectory
+p5 sync -a          # sync entire depot (//...)
+p5 sync -n          # dry run (preview only)
+p5 sync -f          # force resync
+```
 
 ### `p5 filelog <file>`
 
@@ -128,16 +137,14 @@ Interactive TUI for browsing submitted (or pending) changelists.
  ────────────────────────────────────────────────────────────
   CL      Date        Author   Description
  ────────────────────────────────────────────────────────────
- ▶123456  2026-03-25  gigo     Fix null pointer in auth
+  123456  2026-03-25  gigo     Fix null pointer in auth
   123455  2026-03-24  alice    Add retry logic to network
   123454  2026-03-23  bob      Update third-party deps
  ────────────────────────────────────────────────────────────
  [j/k: navigate]  [Enter: expand]  [/: filter]  [q: quit]
 ```
 
-Press `Enter` to expand a changelist and see its files and full colored diff. Press `Esc` to go back.
-
-Options:
+Press `Enter` to expand a changelist — shows files changed and a full colored, syntax-highlighted diff. Press `Esc` to go back.
 
 ```sh
 p5 changes -u alice          # filter by user
@@ -150,8 +157,8 @@ p5 changes -s pending        # show pending CLs instead
 Create a new changelist or edit an existing one. Opens `$EDITOR`.
 
 ```sh
-p5 change          # new CL
-p5 change 123456   # edit CL 123456
+p5 change            # new CL
+p5 change 123456     # edit CL 123456
 p5 change -d 123456  # delete empty CL
 ```
 
@@ -180,10 +187,6 @@ Interactive workspace selector — lists all your Perforce client workspaces and
    gigo-feature-x
    /home/gigo/workspace/feature-x
    2026-03-20   laptop         Feature branch workspace
-
-   gigo-release
-   /home/gigo/workspace/release
-   2026-03-10   build-server   Release stabilization
  ──────────────────────────────────────────────────────────
  [j/k: navigate]  [Enter: switch]  [/: filter]  [q: quit]
 ```
@@ -207,3 +210,5 @@ p5 ws -u alice         # list workspaces for another user
 | Bold blue | Changelist number |
 | Yellow | Author name |
 | Cyan | Diff hunk header (`@@`) |
+| Green background | Added line in diff |
+| Red background | Removed line in diff |

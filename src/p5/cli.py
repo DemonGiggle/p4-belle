@@ -15,8 +15,6 @@ def main() -> None:
 # Import and register all commands
 from p5.commands.status  import status_cmd   # noqa: E402
 from p5.commands.diff    import diff_cmd     # noqa: E402
-from p5.commands.edit    import edit_cmd     # noqa: E402
-from p5.commands.add     import add_cmd      # noqa: E402
 from p5.commands.delete  import delete_cmd   # noqa: E402
 from p5.commands.sync    import sync_cmd     # noqa: E402
 from p5.commands.change  import change_cmd   # noqa: E402
@@ -27,8 +25,6 @@ from p5.commands.ws      import ws_cmd       # noqa: E402
 
 main.add_command(status_cmd,  "status")
 main.add_command(diff_cmd,    "diff")
-main.add_command(edit_cmd,    "edit")
-main.add_command(add_cmd,     "add")
 main.add_command(delete_cmd,  "delete")
 main.add_command(sync_cmd,    "sync")
 main.add_command(change_cmd,  "change")

@@ -13,7 +13,7 @@
 5. [Commands](#commands)
    - [status](#status)
    - [diff](#diff)
-   - [edit / add / delete](#edit--add--delete)
+   - [delete](#delete)
    - [sync](#sync)
    - [change](#change)
    - [submit](#submit)
@@ -198,6 +198,13 @@ Local changes not opened in p4:
   ?  src/scratch.cpp
 ```
 
+**Footer hint**: After the file list, status always prints:
+```
+  use p4 edit <file> to open for edit, p4 add <file> to mark new files,
+  p5 delete <file> to mark for delete
+```
+This is intentional — `p5 edit` and `p5 add` are not provided because they add no meaningful UX improvement over `p4 edit`/`p4 add` directly. `p5 delete` is the exception because it adds a confirmation prompt.
+
 **Implementation**:
 - `p4 opened` → groups by changelist
 - `p4 reconcile -n -e -a -d //...` → untracked / local-only changes
@@ -235,29 +242,34 @@ p5 diff [FILES...] [-c CL]
 
 ---
 
-### `edit / add / delete`
+### `delete`
 
-Open file(s) for a given action.
+Mark file(s) for delete, with a confirmation prompt before calling `p4 delete`.
 
 ```
-p5 edit FILES... [-c CL]
-p5 add  FILES... [-c CL]
-p5 delete FILES... [-c CL]
+p5 delete FILES... [-c CL] [-y]
 ```
 
 | Option | Description |
 |---|---|
-| `FILES` | One or more paths (relative, absolute, or glob) |
+| `FILES` | One or more paths (relative or absolute) |
 | `-c CL` | Add to a specific changelist instead of default |
+| `-y` | Skip confirmation prompt |
 
 **Output**:
 
 ```
-  opened  src/auth/login.cpp    ← yellow (edit), green (add), red (delete)
-  already opened:  src/auth/session.h
+Files to be deleted:
+  D  src/auth/old_helper.cpp
+
+Mark these files for delete? [y/N]: y
+
+  deleted  src/auth/old_helper.cpp
 ```
 
-**Implementation**: `p4 edit/add/delete [-c CL] <depot_paths>`. Output lines are parsed for "opened for edit/add/delete" messages; other lines are shown dimmed.
+**Rationale**: `p5 edit` and `p5 add` are intentionally absent — they wrap `p4 edit`/`p4 add` with minimal UX gain. Delete is the exception because it is irreversible enough to warrant a confirmation step.
+
+**Implementation**: Resolves relative paths to depot paths, shows the list, confirms, then calls `p4 delete [-c CL] <depot_paths>`. Parses "opened for delete" lines for display; other lines shown dimmed.
 
 ---
 
@@ -266,14 +278,15 @@ p5 delete FILES... [-c CL]
 Sync workspace to head with a summary.
 
 ```
-p5 sync [PATH] [-f] [-n]
+p5 sync [PATH] [-f] [-n] [-a]
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `PATH` | `//...` | Depot path or local path to sync |
+| `PATH` | current directory | Local or depot path to sync recursively |
 | `-f` | off | Force resync |
 | `-n` | off | Dry run (preview only) |
+| `-a, --all` | off | Sync entire depot (`//...`) |
 
 **Output**:
 

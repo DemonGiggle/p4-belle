@@ -97,3 +97,10 @@ def status_cmd() -> None:
             t.append(f"  {letter}  ", style=f"bold {color}")
             t.append(path)
             console.print(t)
+
+    console.print()
+    console.print(
+        "  [dim]use [/dim][bold]p4 edit <file>[/bold][dim] to open for edit, "
+        "[/dim][bold]p4 add <file>[/bold][dim] to mark new files, "
+        "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete[/dim]"
+    )
