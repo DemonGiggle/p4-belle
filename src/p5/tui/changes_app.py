@@ -173,19 +173,85 @@ class DiffView(ScrollableContainer):
 _HUNK_RE   = re.compile(r"^(@@ .+? @@)(.*)")
 _HEADER_RE = re.compile(r"^==== (.+?)#(\d+)")
 
+# ── Syntax highlighting ───────────────────────────────────────────────────────
+
+# VS Code Dark+ inspired token → Rich style mapping (most-specific first)
+from pygments.token import Token  # noqa: E402
+
+_TOKEN_STYLES: list[tuple] = [
+    (Token.Comment,                    "italic #6A9955"),
+    (Token.Keyword.Type,               "#4EC9B0"),
+    (Token.Keyword,                    "bold #569CD6"),
+    (Token.Name.Function.Magic,        "#DCDCAA"),
+    (Token.Name.Function,              "#DCDCAA"),
+    (Token.Name.Class,                 "#4EC9B0"),
+    (Token.Name.Builtin.Pseudo,        "#569CD6"),
+    (Token.Name.Builtin,               "#4EC9B0"),
+    (Token.Name.Decorator,             "#C586C0"),
+    (Token.Name.Namespace,             "#4EC9B0"),
+    (Token.Name.Attribute,             "#9CDCFE"),
+    (Token.Name.Tag,                   "#569CD6"),
+    (Token.Literal.String.Interpol,    "#569CD6"),
+    (Token.Literal.String,             "#CE9178"),
+    (Token.Literal.Number,             "#B5CEA8"),
+    (Token.Operator.Word,              "bold #569CD6"),
+    (Token.Operator,                   "#D4D4D4"),
+    (Token.Punctuation,                "#D4D4D4"),
+    (Token.Generic.Heading,            "bold"),
+    (Token.Name,                       "#9CDCFE"),
+]
+
+
+def _get_lexer(depot_path: str):
+    """Return a Pygments lexer for the given file path, or None."""
+    from pygments.lexers import get_lexer_for_filename
+    from pygments.util import ClassNotFound
+    try:
+        return get_lexer_for_filename(depot_path, stripall=True)
+    except ClassNotFound:
+        return None
+
+
+def _token_style(ttype) -> str | None:
+    for token_type, style in _TOKEN_STYLES:
+        if ttype in token_type:
+            return style
+    return None
+
+
+def _highlight(code: str, lexer) -> str:
+    """Tokenize `code` and return Rich markup string with syntax colors."""
+    if lexer is None:
+        return _esc(code)
+    result = ""
+    for ttype, value in lexer.get_tokens(code):
+        if value in ("\n", ""):
+            continue
+        style   = _token_style(ttype)
+        escaped = _esc(value)
+        result += f"[{style}]{escaped}[/{style}]" if style else escaped
+    return result
+
+
+# ── Diff renderer ─────────────────────────────────────────────────────────────
 
 def _colorize_diff(raw: str) -> list[str]:
     out: list[str] = []
+    lexer = None   # updated each time we see a new file header
+
     for line in raw.splitlines():
         if re.match(r"^(Change|Date|User|Client|Description|Files|Affected|Differences).*:", line):
             continue
+
         if m := _HEADER_RE.match(line):
-            rel = any_to_rel(m.group(1))
+            rel   = any_to_rel(m.group(1))
+            lexer = _get_lexer(m.group(1))
             out.append(f"[bold white]diff {_esc(rel)}[/bold white]")
-        elif line.startswith("--- "):
-            out.append(f"[{T.DIFF_DEL}]{_esc(line)}[/{T.DIFF_DEL}]")
-        elif line.startswith("+++ "):
-            out.append(f"[{T.DIFF_ADD}]{_esc(line)}[/{T.DIFF_ADD}]")
+
+        elif line.startswith("--- ") or line.startswith("+++ "):
+            # Unified diff file markers — show dimly, no syntax
+            out.append(f"[dim]{_esc(line)}[/dim]")
+
         elif line.startswith("@@"):
             if hm := _HUNK_RE.match(line):
                 out.append(
@@ -194,12 +260,19 @@ def _colorize_diff(raw: str) -> list[str]:
                 )
             else:
                 out.append(f"[bold {T.DIFF_HUNK}]{_esc(line)}[/bold {T.DIFF_HUNK}]")
+
         elif line.startswith("+"):
-            out.append(f"[{T.DIFF_ADD}]{_esc(line)}[/{T.DIFF_ADD}]")
+            highlighted = _highlight(line[1:], lexer)
+            out.append(f"[bold {T.DIFF_ADD}]+[/bold {T.DIFF_ADD}]{highlighted}")
+
         elif line.startswith("-"):
-            out.append(f"[{T.DIFF_DEL}]{_esc(line)}[/{T.DIFF_DEL}]")
+            highlighted = _highlight(line[1:], lexer)
+            out.append(f"[bold {T.DIFF_DEL}]-[/bold {T.DIFF_DEL}]{highlighted}")
+
         else:
-            out.append(_esc(line))
+            # Context line — syntax-highlight but no diff color
+            out.append(f"[dim] [/dim]{_highlight(line[1:] if line.startswith(' ') else line, lexer)}")
+
     return out
 
 
