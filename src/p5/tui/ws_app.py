@@ -28,17 +28,20 @@ class ClientRecord:
 
 
 def _fetch_clients(user: str | None) -> list[ClientRecord]:
-    args = ["clients"]
-    if user:
-        args += ["-u", user]
-    records = run_p4_tagged(args)
-
-    # Get current client name
+    # Resolve current user + client from p4 info (single call, reuse for both)
     try:
         info = run_p4_tagged(["info"])
-        current = info[0].get("clientName", "") if info else ""
+        info0 = info[0] if info else {}
     except P4Error:
-        current = ""
+        info0 = {}
+
+    current = info0.get("clientName", "")
+    resolved_user = user or info0.get("userName", "")
+
+    args = ["clients"]
+    if resolved_user:
+        args += ["-u", resolved_user]
+    records = run_p4_tagged(args)
 
     result: list[ClientRecord] = []
     for r in records:

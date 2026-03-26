@@ -55,17 +55,24 @@ def _print_list(user: str | None) -> None:
     """Non-interactive fallback: print all workspaces as a table."""
     from rich.table import Table
 
+    try:
+        info = run_p4_tagged(["info"])
+        info0 = info[0] if info else {}
+    except P4Error:
+        info0 = {}
+
+    current       = info0.get("clientName", "") or os.environ.get("P4CLIENT", "")
+    resolved_user = user or info0.get("userName", "")
+
     args = ["clients"]
-    if user:
-        args += ["-u", user]
+    if resolved_user:
+        args += ["-u", resolved_user]
 
     try:
         records = run_p4_tagged(args)
     except P4Error as e:
         console.print(f"[red]error:[/red] {e}")
         return
-
-    current = _get_current_client()
 
     table = Table(show_header=True, header_style=f"bold {T.SECTION}", box=None, padding=(0, 2))
     table.add_column("", width=2)
