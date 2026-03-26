@@ -177,11 +177,16 @@ All commands accept `-h` / `--help`.
 
 ### `status`
 
-Show all pending changes grouped by changelist — like `git status`.
+Show pending changes in the current directory grouped by changelist — like `git status`.
 
 ```
-p5 status
+p5 status [PATH] [-a]
 ```
+
+| Option | Default | Description |
+|---|---|---|
+| `PATH` | current directory | Local or depot path to check |
+| `-a, --all` | off | Show entire depot (`//...`) |
 
 **Output sections** (only shown when non-empty):
 
@@ -206,8 +211,8 @@ Local changes not opened in p4:
 This is intentional — `p5 edit` and `p5 add` are not provided because they add no meaningful UX improvement over `p4 edit`/`p4 add` directly. `p5 delete` is the exception because it adds a confirmation prompt.
 
 **Implementation**:
-- `p4 opened` → groups by changelist
-- `p4 reconcile -n -e -a -d //...` → untracked / local-only changes
+- `p4 opened <depot_path>/...` → groups by changelist (scoped to current directory by default)
+- `p4 reconcile -n -e -a -d <depot_path>/...` → untracked / local-only changes
 - Empty state: prints `nothing to commit, working tree clean`
 
 ---

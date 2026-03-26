@@ -1,6 +1,7 @@
 """p5 status — git-like pending changes overview."""
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 
 import click
@@ -8,8 +9,9 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
+from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel
+from p5.workspace import any_to_rel, local_to_depot
 
 console = Console()
 
@@ -32,10 +34,21 @@ def _render_file_line(action: str, rel_path: str) -> Text:
 
 
 @click.command()
-def status_cmd() -> None:
-    """Show pending changes (like git status)."""
+@click.argument("path", default=None, required=False,
+                shell_complete=complete_depot_path)
+@click.option("-a", "--all", "show_all", is_flag=True,
+              help="Show entire depot, not just current directory")
+def status_cmd(path: str | None, show_all: bool) -> None:
+    """Show pending changes in the current directory (like git status)."""
+    if show_all:
+        depot_path = "//..."
+    elif path is not None:
+        depot_path = local_to_depot(path) + "/..."
+    else:
+        depot_path = local_to_depot(os.getcwd()) + "/..."
+
     try:
-        opened = run_p4_tagged(["opened"])
+        opened = run_p4_tagged(["opened", depot_path])
     except P4Error as e:
         # "file(s) not opened on this client" → nothing open
         if "not opened" in str(e).lower():
@@ -45,7 +58,7 @@ def status_cmd() -> None:
 
     # Also get reconcile / untracked status
     try:
-        reconcile = run_p4_tagged(["reconcile", "-n", "-e", "-a", "-d", "..."])
+        reconcile = run_p4_tagged(["reconcile", "-n", "-e", "-a", "-d", depot_path])
     except P4Error:
         reconcile = []
 
@@ -102,5 +115,6 @@ def status_cmd() -> None:
     console.print(
         "  [dim]use [/dim][bold]p4 edit <file>[/bold][dim] to open for edit, "
         "[/dim][bold]p4 add <file>[/bold][dim] to mark new files, "
-        "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete[/dim]"
+        "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete  "
+        "([/dim][bold]p5 status -a[/bold][dim] for entire depot)[/dim]"
     )

@@ -65,7 +65,7 @@ Completions supported:
 
 ### `p5 status`
 
-Show all pending changes, grouped by changelist — like `git status`.
+Show pending changes in the current directory, grouped by changelist — like `git status`.
 
 ```
 Changes to be submitted (default changelist):
@@ -80,7 +80,13 @@ Local changes not opened in p4:
   ?  src/scratch.cpp
 
   use p4 edit <file> to open for edit, p4 add <file> to mark new files,
-  p5 delete <file> to mark for delete
+  p5 delete <file> to mark for delete  (p5 status -a for entire depot)
+```
+
+```sh
+p5 status              # current directory (default)
+p5 status src/auth     # specific subdirectory
+p5 status -a           # entire depot
 ```
 
 `p5 status` intentionally does not wrap `p4 edit` or `p4 add` — those commands add little value as wrappers and are faster to type directly. `p5 delete` is the exception because it adds a confirmation prompt.
