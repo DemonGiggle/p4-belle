@@ -1,8 +1,0 @@
-Metadata-Version: 2.4
-Name: p5
-Version: 0.1.0
-Summary: Perforce CLI with git-like UX
-Requires-Python: >=3.9
-Requires-Dist: click>=8.1
-Requires-Dist: rich>=13.0
-Requires-Dist: textual>=0.47

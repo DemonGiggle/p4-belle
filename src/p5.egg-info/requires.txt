@@ -1,3 +1,0 @@
-click>=8.1
-rich>=13.0
-textual>=0.47
