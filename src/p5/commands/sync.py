@@ -21,20 +21,41 @@ _REV_RE     = re.compile(r"^(.+?)#(\d+) - is sync'd at #(\d+)")
 
 
 @click.command()
-@click.argument("path", default="//...", required=False)
+@click.argument("path", default=None, required=False)
 @click.option("-f", "--force", is_flag=True, help="Force resync")
 @click.option("-n", "--dry-run", "dry_run", is_flag=True, help="Preview only")
-def sync_cmd(path: str, force: bool, dry_run: bool) -> None:
-    """Sync workspace to head (or a specific revision)."""
+@click.option("-a", "--all", "sync_all", is_flag=True, help="Sync entire depot (//...)")
+def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool) -> None:
+    """Sync current directory to head (or a specific path/revision).
+
+    With no arguments, syncs the current directory recursively.
+    Use -a / --all to sync the entire depot.
+    """
+    import os
     args = ["sync"]
     if force:
         args.append("-f")
     if dry_run:
         args.append("-n")
-    depot_path = local_to_depot(path) if not path.startswith("//") else path
+
+    if sync_all:
+        depot_path = "//..."
+    elif path is None:
+        # Default: sync current directory recursively
+        depot_path = local_to_depot(os.getcwd()) + "/..."
+    elif path.startswith("//"):
+        depot_path = path
+    else:
+        depot_path = local_to_depot(path)
+        # Append /... if it's a directory so sync is recursive
+        if not depot_path.endswith("/...") and not re.search(r"#\d+$|@\d+$|@.+$", depot_path):
+            from pathlib import Path
+            if Path(path).is_dir() or path.endswith("/") or path == ".":
+                depot_path = depot_path.rstrip("/") + "/..."
     args.append(depot_path)
 
-    console.print("[dim]Syncing to head...[/dim]")
+    display = "//..." if depot_path == "//..." else any_to_rel(depot_path.removesuffix("/...") or depot_path)
+    console.print(f"[dim]Syncing {display} to head...[/dim]")
     console.print()
 
     try:
