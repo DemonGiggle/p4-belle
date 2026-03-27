@@ -40,13 +40,14 @@ def _epoch_to_date(ts: str) -> str:
         return str(ts)
 
 
-def _fetch_changes(user: str | None, max_cls: int, cl_status: str) -> list[ChangeRecord]:
+def _fetch_changes(user: str | None, max_cls: int, cl_status: str,
+                   p4_path: str = "//...") -> list[ChangeRecord]:
     args = ["changes", "-l", "-m", str(max_cls)]
     if cl_status != "all":
         args += ["-s", cl_status]
     if user:
         args += ["-u", user]
-    args.append("//...")
+    args.append(p4_path)
 
     records = run_p4_tagged(args)
     result: list[ChangeRecord] = []
@@ -340,11 +341,13 @@ class ChangesApp(App):
         user: str | None = None,
         max_cls: int = 50,
         cl_status: str = "submitted",
+        p4_path: str = "//...",
     ) -> None:
         super().__init__()
         self._user      = user
         self._max_cls   = max_cls
         self._cl_status = cl_status
+        self._p4_path   = p4_path
         self._records:  list[ChangeRecord] = []
         self._filtered: list[ChangeRecord] = []
         self._filter_buf: str = ""
@@ -352,8 +355,9 @@ class ChangesApp(App):
         self._filter_just_committed: bool = False
 
     def compose(self) -> ComposeResult:
+        path_hint = "" if self._p4_path == "//..." else f"  [dim cyan]{any_to_rel(self._p4_path.removesuffix('/...'))}[/dim cyan]"
         yield Static(
-            "[bold]p5 changes[/bold]  [dim]— Perforce changelist browser[/dim]",
+            f"[bold]p5 changes[/bold]  [dim]— Perforce changelist browser[/dim]{path_hint}",
             id="header-bar", markup=True,
         )
         yield Static(
@@ -373,7 +377,7 @@ class ChangesApp(App):
     @work(thread=True)
     def _load_changes(self) -> None:
         try:
-            records = _fetch_changes(self._user, self._max_cls, self._cl_status)
+            records = _fetch_changes(self._user, self._max_cls, self._cl_status, self._p4_path)
             self._records = records
             self._run_filter()
             self.call_from_thread(self._rebuild_list)
