@@ -50,8 +50,27 @@ def _show_pending(cl: str | None) -> bool:
 @click.option("-d", "--description", default=None, help="Changelist description (skips editor)")
 @click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
 def submit_cmd(cl: str | None, description: str | None, no_confirm: bool) -> None:
-    """Submit pending changes to the depot."""
+    """Submit pending changes to the depot.
+
+    \b
+    With no arguments: interactive TUI to browse pending changelists,
+    manage files, edit descriptions, and submit.
+
+    With -c/-d/-y flags: direct submit (non-interactive).
+    """
     check_cwd_in_workspace()
+
+    # If no flags given, launch interactive TUI
+    if cl is None and description is None and not no_confirm:
+        try:
+            from p5.tui.submit_app import SubmitApp
+            app = SubmitApp()
+            app.run()
+        except ImportError as e:
+            console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")
+        return
+
+    # Direct submit mode (with flags)
     if not _show_pending(cl):
         return
 
