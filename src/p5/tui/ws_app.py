@@ -256,7 +256,14 @@ class WorkspaceApp(App):
     def action_cursor_up(self) -> None:
         self.query_one("#list-view", ListView).action_cursor_up()
 
+    @on(ListView.Selected)
+    def on_list_selected(self, event: ListView.Selected) -> None:
+        item = event.item
+        if isinstance(item, ClientItem):
+            self._do_switch(item.rec)
+
     def action_select(self) -> None:
+        """Fallback for Enter if ListView doesn't fire Selected."""
         lv = self.query_one("#list-view", ListView)
         idx = lv.index
         if idx is None or idx >= len(self._filtered):
