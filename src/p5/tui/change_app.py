@@ -242,6 +242,13 @@ class ChangeApp(App):
     #filter-bar  { display: none; background: $primary; padding: 0 1;
                    dock: bottom; height: 1; }
     #filter-bar.visible { display: block; }
+    #filter-input {
+        display: none;
+        dock: bottom;
+        height: 3;
+        margin: 0;
+    }
+    #filter-input.visible { display: block; }
     #file-list { height: 1fr; }
     """
 
@@ -275,6 +282,7 @@ class ChangeApp(App):
             markup=True,
         )
         yield ListView(id="file-list")
+        yield Input(placeholder="Filter files…", id="filter-input")
         yield Static("", id="filter-bar", markup=True)
         yield Static(
             "[dim] space[/dim] toggle  [dim]a[/dim] all  "
@@ -474,44 +482,55 @@ class ChangeApp(App):
     def action_start_filter(self) -> None:
         self._filtering = True
         self._filter_buf = self._filter_text
+        filter_input = self.query_one("#filter-input", Input)
+        filter_input.value = self._filter_text
+        filter_input.add_class("visible")
+        filter_input.focus()
         self._update_filter_bar()
-        self.query_one("#filter-bar", Static).add_class("visible")
 
     def _update_filter_bar(self) -> None:
         fb = self.query_one("#filter-bar", Static)
-        fb.update(f"[bold]filter:[/bold] {_esc(self._filter_buf)}\u258f")
+        if self._filtering:
+            text = self._filter_buf
+        else:
+            text = self._filter_text
+        if text:
+            fb.update(f"[bold]filter:[/bold] {_esc(text)}")
+            fb.add_class("visible")
+        else:
+            fb.update("")
+            fb.remove_class("visible")
+
+    @on(Input.Changed, "#filter-input")
+    def on_filter_changed(self, event: Input.Changed) -> None:
+        self._filter_buf = event.value
+        self._filter_text = event.value
+        self._update_filter_bar()
+        self._run_filter()
+        self._rebuild_list()
+
+    @on(Input.Submitted, "#filter-input")
+    def on_filter_submitted(self, event: Input.Submitted) -> None:
+        self._filtering = False
+        self._filter_buf = event.value
+        self._filter_text = event.value
+        self._filter_just_committed = True
+        self.query_one("#filter-input", Input).remove_class("visible")
+        self.query_one("#file-list", ListView).focus()
+        self._update_filter_bar()
 
     def on_key(self, event) -> None:
-        if not self._filtering:
+        if not self._filtering or event.key != "escape":
             return
 
-        key = event.key
-        if key == "enter":
-            self._filtering = False
-            self._filter_just_committed = True
-            self.query_one("#filter-bar", Static).remove_class("visible")
-            event.stop()
-        elif key == "escape":
-            self._filtering = False
-            self._filter_buf = ""
-            self._filter_text = ""
-            self.query_one("#filter-bar", Static).remove_class("visible")
-            self._run_filter()
-            self._rebuild_list()
-            event.stop()
-        elif key == "backspace":
-            self._filter_buf = self._filter_buf[:-1]
-            self._filter_text = self._filter_buf
-            self._update_filter_bar()
-            self._run_filter()
-            self._rebuild_list()
-            event.stop()
-        elif len(event.character or "") == 1 and event.character.isprintable():
-            self._filter_buf += event.character
-            self._filter_text = self._filter_buf
-            self._update_filter_bar()
-            self._run_filter()
-            self._rebuild_list()
-            event.stop()
-        else:
-            event.stop()
+        self._filtering = False
+        self._filter_buf = ""
+        self._filter_text = ""
+        filter_input = self.query_one("#filter-input", Input)
+        filter_input.value = ""
+        filter_input.remove_class("visible")
+        self.query_one("#file-list", ListView).focus()
+        self._update_filter_bar()
+        self._run_filter()
+        self._rebuild_list()
+        event.stop()
