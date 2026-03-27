@@ -10,7 +10,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4
-from p5.workspace import any_to_rel, local_to_depot
+from p5.workspace import any_to_rel
 
 console = Console()
 
@@ -40,22 +40,27 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool) -> No
         args.append("-n")
 
     if sync_all:
-        depot_path = "//..."
+        p4_path = "//..."
     elif path is None:
-        # Default: sync current directory recursively
-        depot_path = local_to_depot(os.getcwd()) + "/..."
+        # Default: sync current directory recursively using local path
+        p4_path = os.getcwd().rstrip("/") + "/..."
     elif path.startswith("//"):
-        depot_path = path
+        # Depot path — pass through as-is
+        p4_path = path
     else:
-        depot_path = local_to_depot(path)
-        # Append /... if it's a directory so sync is recursive
-        if not depot_path.endswith("/...") and not re.search(r"#\d+$|@\d+$|@.+$", depot_path):
-            from pathlib import Path
-            if Path(path).is_dir() or path.endswith("/") or path == ".":
-                depot_path = depot_path.rstrip("/") + "/..."
-    args.append(depot_path)
+        # Local path — resolve to absolute; append /... for directories
+        abs_path = os.path.abspath(path)
+        if not re.search(r"#\d+$|@\d+$|@.+$", abs_path):
+            from pathlib import Path as PathLib
+            if PathLib(path).is_dir() or path.endswith("/") or path == ".":
+                p4_path = abs_path.rstrip("/") + "/..."
+            else:
+                p4_path = abs_path
+        else:
+            p4_path = abs_path
+    args.append(p4_path)
 
-    display = "//..." if depot_path == "//..." else any_to_rel(depot_path.removesuffix("/...") or depot_path)
+    display = "//..." if p4_path == "//..." else any_to_rel(p4_path.removesuffix("/...") or p4_path)
     console.print(f"[dim]Syncing {display} to head...[/dim]")
     console.print()
 

@@ -9,7 +9,7 @@ from rich.text import Text
 
 from p5 import theme
 from p5.p4 import P4Error, run_p4
-from p5.workspace import any_to_rel, local_to_depot
+from p5.workspace import any_to_rel
 
 console = Console()
 
@@ -62,16 +62,20 @@ from p5.completion import complete_opened_files, complete_pending_cls  # noqa: E
 @click.argument("files", nargs=-1, shell_complete=complete_opened_files)
 @click.option("-c", "--cl", default=None, help="Diff files in a specific changelist",
               shell_complete=complete_pending_cls)
-def diff_cmd(files: tuple[str, ...], cl: str | None) -> None:
+@click.option("-a", "--all", "show_all", is_flag=True,
+              help="Diff all opened files across the entire depot")
+def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool) -> None:
     """Show colored diff of opened files."""
     import os
     args = ["diff", "-du"]
     if cl:
         args += ["-c", cl]
     if files:
-        args += [local_to_depot(f) for f in files]
+        args += [os.path.abspath(f) for f in files]
+    elif show_all:
+        args.append("//...")
     else:
-        # Default to current directory, consistent with status/sync
+        # Default to current directory, consistent with status/sync/changes
         args.append(os.getcwd().rstrip("/") + "/...")
 
     try:
