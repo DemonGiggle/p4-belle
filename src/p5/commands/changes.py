@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 
 from p5.p4 import P4Error
+from p5.workspace import check_cwd_in_workspace
 
 console = Console()
 
@@ -27,6 +28,8 @@ def changes_cmd(path: str | None, user: str | None, max_cls: int,
     By default, shows changes touching the current directory.
     Use -a / --all for the entire depot, or pass a specific path.
     """
+    if not show_all:
+        check_cwd_in_workspace()
     if show_all:
         p4_path = "//..."
     elif path is not None:

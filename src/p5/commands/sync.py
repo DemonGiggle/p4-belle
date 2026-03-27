@@ -10,7 +10,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4, run_p4_tagged
-from p5.workspace import any_to_rel
+from p5.workspace import any_to_rel, check_cwd_in_workspace
 
 console = Console()
 
@@ -32,6 +32,8 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool) -> No
     With no arguments, syncs the current directory recursively.
     Use -a / --all to sync the entire depot.
     """
+    if not sync_all:
+        check_cwd_in_workspace()
     import os
     args = ["sync"]
     if force:

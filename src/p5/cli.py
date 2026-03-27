@@ -1,13 +1,28 @@
 """Main CLI entry point for p5."""
 from __future__ import annotations
 
+import sys
+
 import click
 from rich.console import Console
+
+from p5.p4 import P4Error
 
 console = Console()
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+class P5Group(click.Group):
+    """Click group that catches P4Error and prints it cleanly."""
+
+    def invoke(self, ctx: click.Context) -> None:
+        try:
+            return super().invoke(ctx)
+        except P4Error as e:
+            console.print(f"[red]error:[/red] {e}")
+            sys.exit(1)
+
+
+@click.group(cls=P5Group, context_settings={"help_option_names": ["-h", "--help"]})
 def main() -> None:
     """p5 — Perforce with git-like UX.\n
     Wraps p4 commands with relative paths, colored output, and a better interface.

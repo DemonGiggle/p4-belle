@@ -11,7 +11,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel
+from p5.workspace import any_to_rel, check_cwd_in_workspace
 
 console = Console()
 
@@ -40,6 +40,8 @@ def _render_file_line(action: str, rel_path: str) -> Text:
               help="Show entire depot, not just current directory")
 def status_cmd(path: str | None, show_all: bool) -> None:
     """Show pending changes in the current directory (like git status)."""
+    if not show_all:
+        check_cwd_in_workspace()
     if show_all:
         p4_path = "//..."
     elif path is not None:

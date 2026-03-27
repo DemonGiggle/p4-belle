@@ -9,7 +9,7 @@ from rich.text import Text
 
 from p5 import theme
 from p5.p4 import P4Error, run_p4
-from p5.workspace import any_to_rel
+from p5.workspace import any_to_rel, check_cwd_in_workspace
 
 console = Console()
 
@@ -66,6 +66,8 @@ from p5.completion import complete_opened_files, complete_pending_cls  # noqa: E
               help="Diff all opened files across the entire depot")
 def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool) -> None:
     """Show colored diff of opened files."""
+    if not show_all:
+        check_cwd_in_workspace()
     import os
     args = ["diff", "-du"]
     if cl:

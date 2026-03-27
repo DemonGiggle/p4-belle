@@ -10,7 +10,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_pending_cls
 from p5.p4 import P4Error, run_p4, run_p4_tagged
-from p5.workspace import any_to_rel
+from p5.workspace import any_to_rel, check_cwd_in_workspace
 
 console = Console()
 
@@ -51,6 +51,7 @@ def _show_pending(cl: str | None) -> bool:
 @click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
 def submit_cmd(cl: str | None, description: str | None, no_confirm: bool) -> None:
     """Submit pending changes to the depot."""
+    check_cwd_in_workspace()
     if not _show_pending(cl):
         return
 

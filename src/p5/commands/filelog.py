@@ -10,7 +10,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel, local_to_depot
+from p5.workspace import any_to_rel, check_cwd_in_workspace, local_to_depot
 
 console = Console()
 
@@ -21,6 +21,7 @@ console = Console()
               help="Max number of revisions to show")
 def filelog_cmd(file: str, max_rev: int) -> None:
     """Show revision history of a file (git log style)."""
+    check_cwd_in_workspace()
     depot_path = local_to_depot(file)
     rel        = any_to_rel(depot_path)
 

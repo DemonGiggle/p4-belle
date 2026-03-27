@@ -8,7 +8,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
 from p5.p4 import P4Error, run_p4
-from p5.workspace import any_to_rel, local_to_depot
+from p5.workspace import any_to_rel, check_cwd_in_workspace, local_to_depot
 
 console = Console()
 
@@ -20,6 +20,7 @@ console = Console()
 @click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
 def delete_cmd(files: tuple[str, ...], cl: str | None, no_confirm: bool) -> None:
     """Mark file(s) for delete (with confirmation)."""
+    check_cwd_in_workspace()
     depot_paths = [local_to_depot(f) for f in files]
     rel_paths = [any_to_rel(dp) for dp in depot_paths]
 

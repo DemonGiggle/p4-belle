@@ -115,6 +115,25 @@ def get_workspace() -> Workspace:
     return _workspace
 
 
+def check_cwd_in_workspace(cwd: str | None = None) -> None:
+    """Raise P4Error if cwd is not under the current client root.
+
+    Call this early in any command that uses local paths to detect when
+    the user is outside their active workspace.
+    """
+    ws = get_workspace()
+    target = Path(cwd or os.getcwd()).resolve()
+    try:
+        target.relative_to(ws.client_root)
+    except ValueError:
+        raise P4Error(
+            f"Current directory is not inside workspace '{ws.client_name}'\n"
+            f"  cwd:         {target}\n"
+            f"  client root: {ws.client_root}\n\n"
+            f"  Use 'p5 ws' to switch to the correct workspace."
+        )
+
+
 def local_to_depot(path: str) -> str:
     return get_workspace().local_to_depot(path)
 
