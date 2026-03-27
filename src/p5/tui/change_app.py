@@ -105,7 +105,7 @@ class CLSelectorScreen(ModalScreen[str | None]):
             records = run_p4_tagged(args)
         except P4Error:
             records = []
-        self.call_from_thread(self._populate, records)
+        self.app.call_from_thread(self._populate, records)
 
     def _populate(self, records: list[dict]) -> None:
         lv = self.query_one("#cl-list", ListView)
@@ -127,9 +127,9 @@ class CLSelectorScreen(ModalScreen[str | None]):
         try:
             depot_files = [f.depot_file for f in self._files]
             run_p4(["reopen", "-c", cl] + depot_files)
-            self.call_from_thread(self.dismiss, cl)
+            self.app.call_from_thread(self.dismiss, cl)
         except P4Error as e:
-            self.call_from_thread(self.notify, str(e), severity="error")
+            self.app.call_from_thread(self.notify, str(e), severity="error")
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -205,12 +205,12 @@ class NewCLScreen(ModalScreen[str | None]):
             )
             if result.returncode != 0:
                 err = result.stderr.strip() or result.stdout.strip()
-                self.call_from_thread(self.notify, f"Error: {err}", severity="error")
+                self.app.call_from_thread(self.notify, f"Error: {err}", severity="error")
                 return
 
             m = _re.search(r"Change (\d+) created", result.stdout)
             if not m:
-                self.call_from_thread(
+                self.app.call_from_thread(
                     self.notify,
                     f"Unexpected: {result.stdout.strip()}",
                     severity="error",
@@ -223,9 +223,9 @@ class NewCLScreen(ModalScreen[str | None]):
             depot_files = [f.depot_file for f in self._files]
             run_p4(["reopen", "-c", new_cl] + depot_files)
 
-            self.call_from_thread(self.dismiss, new_cl)
+            self.app.call_from_thread(self.dismiss, new_cl)
         except (P4Error, FileNotFoundError) as e:
-            self.call_from_thread(self.notify, str(e), severity="error")
+            self.app.call_from_thread(self.notify, str(e), severity="error")
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -245,8 +245,10 @@ class ChangeApp(App):
     #filter-input {
         display: none;
         dock: bottom;
-        height: 3;
+        height: auto;
         margin: 0;
+        border: none;
+        padding: 0 1;
     }
     #filter-input.visible { display: block; }
     #file-list { height: 1fr; }

@@ -217,7 +217,7 @@ class MoveFilesScreen(ModalScreen[str | None]):
             records = run_p4_tagged(args)
         except P4Error:
             records = []
-        self.call_from_thread(self._populate, records)
+        self.app.call_from_thread(self._populate, records)
 
     def _populate(self, records: list[dict]) -> None:
         lv = self.query_one("#move-list", ListView)
@@ -245,9 +245,9 @@ class MoveFilesScreen(ModalScreen[str | None]):
         try:
             depot_files = [f.depot_file for f in self._files]
             run_p4(["reopen", "-c", cl] + depot_files)
-            self.call_from_thread(self.dismiss, cl)
+            self.app.call_from_thread(self.dismiss, cl)
         except P4Error as e:
-            self.call_from_thread(self.notify, str(e), severity="error")
+            self.app.call_from_thread(self.notify, str(e), severity="error")
 
     def action_cancel(self) -> None:
         self.dismiss(None)
