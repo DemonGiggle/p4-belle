@@ -60,7 +60,7 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool) -> No
     console.print()
 
     try:
-        raw = run_p4(args, check=False)
+        raw = run_p4(args)
     except P4Error as e:
         console.print(f"[red]error:[/red] {e}")
         return

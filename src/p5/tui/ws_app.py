@@ -173,7 +173,6 @@ class WorkspaceApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("j,down",  "cursor_down",  "Down",  show=False),
         Binding("k,up",    "cursor_up",    "Up",    show=False),
-        Binding("enter",   "select",       "Switch"),
         Binding("slash",   "start_filter", "Filter"),
         Binding("r",       "reload",       "Reload"),
         Binding("q",       "quit",         "Quit"),
@@ -187,6 +186,9 @@ class WorkspaceApp(App):
         self._records: list[ClientRecord] = []
         self._filtered: list[ClientRecord] = []
         self._switched_to: str | None = None
+        self._filtering: bool = False
+        self._filter_buf: str = ""
+        self._filter_just_committed: bool = False
 
     # Result after quit — None means no switch was made
     @property
@@ -258,18 +260,12 @@ class WorkspaceApp(App):
 
     @on(ListView.Selected)
     def on_list_selected(self, event: ListView.Selected) -> None:
+        if self._filter_just_committed:
+            self._filter_just_committed = False
+            return
         item = event.item
         if isinstance(item, ClientItem):
             self._do_switch(item.rec)
-
-    def action_select(self) -> None:
-        """Fallback for Enter if ListView doesn't fire Selected."""
-        lv = self.query_one("#list-view", ListView)
-        idx = lv.index
-        if idx is None or idx >= len(self._filtered):
-            return
-        rec = self._filtered[idx]
-        self._do_switch(rec)
 
     def action_reload(self) -> None:
         self._records.clear()
@@ -285,9 +281,10 @@ class WorkspaceApp(App):
         self._filter_buf = ""
 
     def on_key(self, event) -> None:
-        if getattr(self, "_filtering", False):
+        if self._filtering:
             if event.key == "enter":
                 self._filtering = False
+                self._filter_just_committed = True
                 self.filter_text = self._filter_buf
                 fb = self.query_one("#filter-bar", Static)
                 fb.remove_class("visible")

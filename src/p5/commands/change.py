@@ -37,6 +37,9 @@ def change_cmd(cl_number: str | None, do_delete: bool) -> None:
     try:
         # Pass through to p4 which opens $EDITOR
         import subprocess
-        subprocess.run(["p4"] + args[1:] if cl_number else ["p4", "change"])
+        cmd = ["p4", "change"]
+        if cl_number:
+            cmd.append(cl_number)
+        subprocess.run(cmd)
     except Exception as e:
         console.print(f"[red]error:[/red] {e}")

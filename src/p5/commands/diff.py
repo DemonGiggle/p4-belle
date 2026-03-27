@@ -64,13 +64,15 @@ from p5.completion import complete_opened_files, complete_pending_cls  # noqa: E
               shell_complete=complete_pending_cls)
 def diff_cmd(files: tuple[str, ...], cl: str | None) -> None:
     """Show colored diff of opened files."""
+    import os
     args = ["diff", "-du"]
     if cl:
         args += ["-c", cl]
     if files:
         args += [local_to_depot(f) for f in files]
     else:
-        args.append("//...")
+        # Default to current directory, consistent with status/sync
+        args.append(os.getcwd().rstrip("/") + "/...")
 
     try:
         raw = run_p4(args)

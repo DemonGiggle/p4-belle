@@ -1,8 +1,12 @@
 """Low-level p4 subprocess wrapper."""
 from __future__ import annotations
 
+import re
 import subprocess
 from typing import Any
+
+
+_INDEXED_KEY_RE = re.compile(r"^(.+?)(\d+)$")
 
 
 class P4Error(Exception):
@@ -16,12 +20,15 @@ class P4Error(Exception):
 def run_p4(args: list[str], *, cwd: str | None = None, check: bool = True) -> str:
     """Run a p4 command and return stdout as a string."""
     cmd = ["p4"] + args
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+    except FileNotFoundError:
+        raise P4Error("p4 command not found — is Perforce installed and on PATH?")
     if check and result.returncode != 0:
         msg = result.stderr.strip() or result.stdout.strip()
         raise P4Error(msg, result.returncode)
@@ -49,8 +56,7 @@ def _parse_ztag(raw: str) -> list[dict[str, Any]]:
         value = parts[1] if len(parts) > 1 else ""
         # Handle repeated keys (e.g. depotFile0, depotFile1 → list under 'depotFile')
         # p4 -ztag uses indexed keys like depotFile0, depotFile1
-        import re
-        m = re.match(r"^(.+?)(\d+)$", key)
+        m = _INDEXED_KEY_RE.match(key)
         if m:
             base, idx = m.group(1), int(m.group(2))
             if base not in current:

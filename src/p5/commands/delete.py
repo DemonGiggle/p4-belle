@@ -20,7 +20,8 @@ console = Console()
 @click.option("-y", "--yes", "no_confirm", is_flag=True, help="Skip confirmation prompt")
 def delete_cmd(files: tuple[str, ...], cl: str | None, no_confirm: bool) -> None:
     """Mark file(s) for delete (with confirmation)."""
-    rel_paths = [any_to_rel(local_to_depot(f)) for f in files]
+    depot_paths = [local_to_depot(f) for f in files]
+    rel_paths = [any_to_rel(dp) for dp in depot_paths]
 
     if not no_confirm:
         console.print(Text("Files to be deleted:", style=theme.SECTION))
@@ -36,7 +37,7 @@ def delete_cmd(files: tuple[str, ...], cl: str | None, no_confirm: bool) -> None
     args = ["delete"]
     if cl:
         args += ["-c", cl]
-    args += [local_to_depot(f) for f in files]
+    args += depot_paths
 
     try:
         raw = run_p4(args)

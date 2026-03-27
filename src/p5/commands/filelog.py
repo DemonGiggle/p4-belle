@@ -1,6 +1,8 @@
 """p5 filelog — git-log style file history."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import click
 from rich.console import Console
 from rich.text import Text
@@ -59,13 +61,12 @@ def filelog_cmd(file: str, max_rev: int) -> None:
             is_last = i == total - 1
 
             # Format timestamp (p4 gives Unix epoch)
-            from datetime import datetime, timezone
             try:
                 dt_str = datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%d")
             except (ValueError, TypeError):
                 dt_str = str(ts)
 
-            bullet = "●" if not is_last else "●"
+            bullet = "●"
             connector = "│" if not is_last else " "
 
             # Header line
