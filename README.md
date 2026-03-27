@@ -191,11 +191,28 @@ p5 changes -s pending        # show pending CLs instead
 
 ### `p5 change [cl]`
 
-Create a new changelist or edit an existing one. Opens `$EDITOR`.
+Interactive TUI for managing the default changelist, or edit an existing CL.
+
+```
+p5 change
+ ── Selected (2) ──
+   ✓  M  src/auth/login.cpp
+   ✓  A  src/auth/token.h
+ ── Default changelist (3) ──
+      M  src/net/socket.cpp
+   ▶  A  src/ui/main.cpp
+      M  src/ui/helper.h
+ [space: toggle] [a: all] [d: none] [n: new CL] [m: move] [/: filter] [q: quit]
+```
+
+Select files with `space`, filter with `/`, then:
+- `n` — create a new changelist with selected files (enter a description)
+- `m` — move selected files to an existing pending changelist (popup picker)
+- `a` / `d` — select all / deselect all (respects current filter)
 
 ```sh
-p5 change            # new CL
-p5 change 123456     # edit CL 123456
+p5 change            # interactive TUI (default changelist)
+p5 change 123456     # edit CL 123456 in $EDITOR
 p5 change -d 123456  # delete empty CL
 ```
 

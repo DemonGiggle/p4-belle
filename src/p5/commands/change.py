@@ -1,4 +1,4 @@
-"""p5 change — create or edit a changelist."""
+"""p5 change — manage changelists (TUI or edit)."""
 from __future__ import annotations
 
 import click
@@ -6,6 +6,7 @@ from rich.console import Console
 
 from p5.completion import complete_pending_cls
 from p5.p4 import P4Error, run_p4
+from p5.workspace import check_cwd_in_workspace
 
 console = Console()
 
@@ -14,10 +15,13 @@ console = Console()
 @click.argument("cl_number", default=None, required=False, shell_complete=complete_pending_cls)
 @click.option("-d", "--delete", "do_delete", is_flag=True, help="Delete an empty changelist")
 def change_cmd(cl_number: str | None, do_delete: bool) -> None:
-    """Create a new changelist or edit an existing one.
+    """Manage changelists.
 
-    With no arguments, opens an editor to create a new changelist.
-    With a CL number, opens that changelist for editing.
+    \b
+    With no arguments: interactive TUI to select files from the default
+    changelist and group them into a new or existing CL.
+
+    With a CL number: open that changelist for editing in $EDITOR.
     """
     if do_delete:
         if not cl_number:
@@ -30,16 +34,20 @@ def change_cmd(cl_number: str | None, do_delete: bool) -> None:
             console.print(f"[red]error:[/red] {e}")
         return
 
-    args = ["change"]
     if cl_number:
-        args.append(cl_number)
+        # Edit existing CL in $EDITOR
+        try:
+            import subprocess
+            subprocess.run(["p4", "change", cl_number])
+        except Exception as e:
+            console.print(f"[red]error:[/red] {e}")
+        return
 
+    # No arguments — launch TUI for managing default changelist
+    check_cwd_in_workspace()
     try:
-        # Pass through to p4 which opens $EDITOR
-        import subprocess
-        cmd = ["p4", "change"]
-        if cl_number:
-            cmd.append(cl_number)
-        subprocess.run(cmd)
-    except Exception as e:
-        console.print(f"[red]error:[/red] {e}")
+        from p5.tui.change_app import ChangeApp
+        app = ChangeApp()
+        app.run()
+    except ImportError as e:
+        console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")

@@ -84,6 +84,7 @@ src/p5/
 │   ├── changes.py       — launches tui/changes_app.py
 │   └── ws.py            — launches tui/ws_app.py (or prints table with --no-tui)
 └── tui/
+    ├── change_app.py    — Textual app for managing default changelist
     ├── changes_app.py   — Textual app for browsing changelists
     └── ws_app.py        — Textual app for workspace selection
 ```
@@ -315,7 +316,7 @@ Syncing to head...
 
 ### `change`
 
-Create or edit a changelist description.
+Interactive TUI to manage files in the default changelist — select, group into a new CL, or move to an existing one.
 
 ```
 p5 change [CL_NUMBER] [-d]
@@ -323,11 +324,44 @@ p5 change [CL_NUMBER] [-d]
 
 | Option | Description |
 |---|---|
-| *(no args)* | Opens `$EDITOR` to create a new changelist |
+| *(no args)* | Launch interactive TUI for the default changelist |
 | `CL_NUMBER` | Opens that changelist in `$EDITOR` for editing |
 | `-d` | Delete an empty changelist (requires `CL_NUMBER`) |
 
-**Implementation**: Passes directly to `p4 change` via `subprocess.run` (not captured) to preserve interactive editor behavior. Delete uses `p4 change -d CL`.
+**TUI layout** (no args):
+
+```
+p5 change — manage default changelist
+ ── Selected (2) ──
+   ✓  M  src/auth/login.cpp
+   ✓  A  src/auth/token.h
+ ── Default changelist (3) ──
+      M  src/net/socket.cpp
+   ▶  A  src/ui/main.cpp
+      M  src/ui/helper.h
+ [space: toggle] [a: all] [d: none] [n: new CL] [m: move] [/: filter] [q: quit]
+```
+
+**Keybindings**:
+
+| Key | Action |
+|---|---|
+| `space` | Toggle selection of file under cursor |
+| `a` | Select all files (filtered) |
+| `d` | Deselect all files (filtered) |
+| `n` | Create new CL — opens modal with description input and file preview. Files are moved via `p4 change -i` + `p4 reopen -c <new_cl>` |
+| `m` | Move to existing CL — opens modal listing pending CLs + default. Uses `p4 reopen -c <target>` |
+| `/` | Filter files by path substring |
+| `j/k` or `↑/↓` | Move cursor (skips section headers) |
+| `Enter` | Toggle selection (same as space) |
+| `q` | Quit |
+
+**Modals**:
+
+- **New CL screen**: text input for description, file preview, creates CL via `p4 change -i` with minimal spec, then moves files with `p4 reopen -c <cl>`.
+- **CL selector screen**: lists current user's pending CLs (via `p4 changes -s pending -u <user>`) plus "default". Enter confirms and moves files.
+
+**Implementation**: With a CL number, passes directly to `p4 change` via `subprocess.run` (not captured) to preserve interactive editor behavior. Delete uses `p4 change -d CL`.
 
 ---
 
