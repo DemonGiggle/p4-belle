@@ -791,6 +791,7 @@ class SubmitApp(App):
         if self._current_cl:
             return  # filter only in CL list view
         self._filtering = True
+        self._filter_just_committed = False
         self._filter_buf = self._filter_text
         self._update_filter_bar()
         self.query_one("#filter-bar", Static).add_class("visible")
@@ -834,4 +835,4 @@ class SubmitApp(App):
             self._show_cl_list()
             event.stop()
         else:
-            event.stop()
+            return  # let unhandled keys pass through

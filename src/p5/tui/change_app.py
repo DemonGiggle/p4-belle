@@ -483,6 +483,7 @@ class ChangeApp(App):
 
     def action_start_filter(self) -> None:
         self._filtering = True
+        self._filter_just_committed = False
         self._filter_buf = self._filter_text
         filter_input = self.query_one("#filter-input", Input)
         filter_input.value = self._filter_text

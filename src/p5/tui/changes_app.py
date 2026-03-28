@@ -443,6 +443,7 @@ class ChangesApp(App):
         if self.detail_open:
             return
         self._filtering = True
+        self._filter_just_committed = False
         self._filter_buf = ""
         fb = self.query_one("#filter-bar", Static)
         fb.add_class("active")
