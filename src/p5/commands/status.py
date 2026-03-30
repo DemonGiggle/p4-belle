@@ -65,6 +65,24 @@ def _is_excluded(rel_path: str, excludes: list[str]) -> bool:
     return False
 
 
+def _to_cwd_rel(ws_rel_path: str) -> str:
+    """Convert a workspace-root-relative path to a cwd-relative path.
+
+    E.g. if cwd is ``<root>/appsrc`` and path is ``appsrc/foo/bar.cpp``,
+    returns ``foo/bar.cpp``.  Falls back to the original path if cwd is
+    not a parent.
+    """
+    from pathlib import Path
+
+    ws = get_workspace()
+    cwd = Path(os.getcwd()).resolve()
+    abs_path = Path(ws.client_root) / ws_rel_path
+    try:
+        return str(abs_path.relative_to(cwd)).replace(os.sep, "/")
+    except ValueError:
+        return ws_rel_path
+
+
 @click.command()
 @click.argument("path", default=None, required=False,
                 shell_complete=complete_depot_path)
@@ -107,14 +125,15 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     resolved_excludes = _resolve_excludes(excludes) if excludes else []
 
     # Group opened files by changelist, applying excludes
+    # Display paths are relative to cwd (not workspace root)
     cl_files: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for rec in opened:
         cl   = rec.get("change", "default")
-        rel  = any_to_rel(rec.get("depotFile", ""))
+        ws_rel = any_to_rel(rec.get("depotFile", ""))
         action = rec.get("action", "edit")
-        if resolved_excludes and _is_excluded(rel, resolved_excludes):
+        if resolved_excludes and _is_excluded(ws_rel, resolved_excludes):
             continue
-        cl_files[cl].append((action, rel))
+        cl_files[cl].append((action, _to_cwd_rel(ws_rel)))
 
     # Print default CL first
     if "default" in cl_files:
@@ -140,10 +159,10 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     filtered_reconcile: list[tuple[str, str]] = []
     if reconcile:
         for rec in reconcile:
-            rel = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
-            if resolved_excludes and _is_excluded(rel, resolved_excludes):
+            ws_rel = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
+            if resolved_excludes and _is_excluded(ws_rel, resolved_excludes):
                 continue
-            filtered_reconcile.append((rel, rec.get("action", "?")))
+            filtered_reconcile.append((_to_cwd_rel(ws_rel), rec.get("action", "?")))
 
     if not cl_files and not filtered_reconcile:
         console.print("[dim]nothing to commit, working tree clean[/dim]")
