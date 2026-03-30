@@ -33,12 +33,24 @@ def _render_file_line(action: str, rel_path: str) -> Text:
     return t
 
 
+def _is_excluded(rel_path: str, excludes: list[str]) -> bool:
+    """Check if rel_path starts with any of the exclude prefixes."""
+    for ex in excludes:
+        # Normalize: strip trailing slashes for prefix matching
+        ex_clean = ex.rstrip("/")
+        if rel_path == ex_clean or rel_path.startswith(ex_clean + "/"):
+            return True
+    return False
+
+
 @click.command()
 @click.argument("path", default=None, required=False,
                 shell_complete=complete_depot_path)
 @click.option("-a", "--all", "show_all", is_flag=True,
               help="Show entire depot, not just current directory")
-def status_cmd(path: str | None, show_all: bool) -> None:
+@click.option("-x", "--exclude", "excludes", multiple=True,
+              help="Exclude paths matching this prefix (repeatable)")
+def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> None:
     """Show pending changes in the current directory (like git status)."""
     if not show_all:
         check_cwd_in_workspace()
@@ -69,17 +81,15 @@ def status_cmd(path: str | None, show_all: bool) -> None:
     except P4Error:
         reconcile = []
 
-    if not opened and not reconcile:
-        console.print("[dim]nothing to commit, working tree clean[/dim]")
-        return
-
-    # Group opened files by changelist
+    # Group opened files by changelist, applying excludes
     cl_files: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for rec in opened:
         cl   = rec.get("change", "default")
-        path = any_to_rel(rec.get("depotFile", ""))
+        rel  = any_to_rel(rec.get("depotFile", ""))
         action = rec.get("action", "edit")
-        cl_files[cl].append((action, path))
+        if excludes and _is_excluded(rel, list(excludes)):
+            continue
+        cl_files[cl].append((action, rel))
 
     # Print default CL first
     if "default" in cl_files:
@@ -101,12 +111,22 @@ def status_cmd(path: str | None, show_all: bool) -> None:
                 console.print(t)
         console.print()
 
-    # Reconcile / untracked
+    # Reconcile / untracked (filter by excludes)
+    filtered_reconcile: list[tuple[str, str]] = []
     if reconcile:
-        console.print(Text("Local changes not opened in p4:", style=theme.SECTION))
         for rec in reconcile:
-            path   = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
-            action = rec.get("action", "?")
+            rel = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
+            if excludes and _is_excluded(rel, list(excludes)):
+                continue
+            filtered_reconcile.append((rel, rec.get("action", "?")))
+
+    if not cl_files and not filtered_reconcile:
+        console.print("[dim]nothing to commit, working tree clean[/dim]")
+        return
+
+    if filtered_reconcile:
+        console.print(Text("Local changes not opened in p4:", style=theme.SECTION))
+        for path, action in filtered_reconcile:
             if action not in theme.STATE_LETTER:
                 letter = "?"
                 color  = theme.UNTRACKED

@@ -151,6 +151,102 @@ class TestStatusCmd:
         assert "new.cpp" in result.output
         assert "Local changes not opened" in result.output
 
+    def test_exclude_single_path(self):
+        """--exclude hides matching opened files."""
+        result = self._invoke(
+            args=["-x", "src/bar"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "a.cpp" in result.output
+        assert "b.cpp" not in result.output
+
+    def test_exclude_multiple_paths(self):
+        """Multiple --exclude flags each filter their prefix."""
+        result = self._invoke(
+            args=["-x", "src/bar", "-x", "src/foo"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "add", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/baz/c.cpp", "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "c.cpp" in result.output
+        assert "a.cpp" not in result.output
+        assert "b.cpp" not in result.output
+
+    def test_exclude_nested_path(self):
+        """--exclude bar/bar2 excludes bar/bar2/ but not bar/bar3/."""
+        result = self._invoke(
+            args=["-x", "src/bar/bar2"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/bar/bar2/deep.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/bar/bar3/keep.cpp", "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "keep.cpp" in result.output
+        assert "deep.cpp" not in result.output
+
+    def test_exclude_all_shows_clean(self):
+        """Excluding everything results in 'working tree clean'."""
+        result = self._invoke(
+            args=["-x", "src"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/a.cpp", "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "nothing to commit" in result.output
+
+    def test_exclude_applies_to_reconcile(self):
+        """--exclude also filters reconcile/untracked results."""
+        result = self._invoke(
+            args=["-x", "src/vendor"],
+            tagged_results={
+                "opened": P4Error("file(s) not opened on this client"),
+                "reconcile": [
+                    {"depotFile": "//depot/myproject/src/vendor/lib.cpp", "action": "add"},
+                    {"depotFile": "//depot/myproject/src/app/main.cpp", "action": "add"},
+                ],
+            }
+        )
+        assert result.exit_code == 0
+        assert "main.cpp" in result.output
+        assert "lib.cpp" not in result.output
+
+    def test_exclude_exact_file_match(self):
+        """--exclude matches exact file path, not just directories."""
+        result = self._invoke(
+            args=["-x", "src/foo/a.cpp"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/b.cpp", "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "b.cpp" in result.output
+        assert "a.cpp" not in result.output
+
 
 # ── p5 diff ──────────────────────────────────────────────────────────────────
 
