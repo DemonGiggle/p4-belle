@@ -350,6 +350,7 @@ class TestDiffCmd:
         patches = [
             patch("p5.p4.run_p4", fake_run),
             patch("p5.commands.diff.run_p4", fake_run),
+            patch("p5.commands.diff.run_p4_tagged", fake_tagged),
             patch("p5.workspace.run_p4", fake_run),
             patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
         ]
@@ -384,14 +385,22 @@ class TestDiffCmd:
 +    new line added
 -    old line removed
 """
-        result = self._invoke(raw_results={"diff": diff_text})
+        result = self._invoke(
+            tagged_results={
+                "diff": [{"depotFile": "//depot/myproject/src/main.cpp"}],
+            },
+            raw_results={"diff": diff_text},
+        )
         assert result.exit_code == 0
         assert "main.cpp" in result.output
         assert "new line added" in result.output
         assert "old line removed" in result.output
 
     def test_empty_diff(self):
-        result = self._invoke(raw_results={"diff": ""})
+        result = self._invoke(
+            tagged_results={"diff": []},
+            raw_results={"diff": ""},
+        )
         assert result.exit_code == 0
         assert "no differences" in result.output
 

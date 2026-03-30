@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
-from p5.p4 import P4Error, run_p4
+from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.workspace import any_to_rel, check_cwd_in_workspace
 
 console = Console()
@@ -69,16 +69,40 @@ def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool) -> None:
     if not show_all:
         check_cwd_in_workspace()
     import os
+
+    if files:
+        # Explicit files — diff them directly
+        diff_targets = [os.path.abspath(f) for f in files]
+    elif show_all:
+        diff_targets = ["//..."]
+    else:
+        diff_targets = [os.getcwd().rstrip("/") + "/..."]
+
+    # Fast path: ask p4 which files actually differ before computing
+    # full diffs. 'p4 diff -sa' is much faster than 'p4 diff -du' on
+    # large workspaces because it only stats files, not reads content.
+    if not files:
+        try:
+            sa_args = ["diff", "-sa"]
+            if cl:
+                sa_args += ["-c", cl]
+            sa_args += diff_targets
+            changed = run_p4_tagged(sa_args)
+            if not changed:
+                console.print("[dim]no differences[/dim]")
+                return
+            # Use only the files that actually differ
+            diff_targets = [r.get("depotFile", "") for r in changed if r.get("depotFile")]
+            if not diff_targets:
+                console.print("[dim]no differences[/dim]")
+                return
+        except P4Error:
+            pass  # fall through to full diff
+
     args = ["diff", "-du"]
     if cl:
         args += ["-c", cl]
-    if files:
-        args += [os.path.abspath(f) for f in files]
-    elif show_all:
-        args.append("//...")
-    else:
-        # Default to current directory, consistent with status/sync/changes
-        args.append(os.getcwd().rstrip("/") + "/...")
+    args += diff_targets
 
     try:
         raw = run_p4(args)
