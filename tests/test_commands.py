@@ -368,15 +368,7 @@ class TestDiffCmd:
             import p5.workspace as ws
             ws._workspace = None
 
-    def test_no_differences(self):
-        result = self._invoke(
-            raw_results={"diff": P4Error("file(s) not opened for edit")}
-        )
-        assert result.exit_code == 0
-        assert "no differences" in result.output
-
-    def test_diff_output_rendered(self):
-        diff_text = """\
+    DIFF_TEXT = """\
 ==== //depot/myproject/src/main.cpp#5 (text) ====
 --- a/src/main.cpp
 +++ b/src/main.cpp
@@ -385,24 +377,86 @@ class TestDiffCmd:
 +    new line added
 -    old line removed
 """
+
+    def test_no_files_opened(self):
+        """p4 diff -sa returns nothing → no differences."""
+        result = self._invoke(
+            tagged_results={"diff -sa": []},
+        )
+        assert result.exit_code == 0
+        assert "no differences" in result.output
+
+    def test_sa_prefilter_then_du(self):
+        """diff -sa finds changed files, then diff -du shows the diff."""
         result = self._invoke(
             tagged_results={
-                "diff": [{"depotFile": "//depot/myproject/src/main.cpp"}],
+                "diff -sa": [{"depotFile": "//depot/myproject/src/main.cpp"}],
             },
-            raw_results={"diff": diff_text},
+            raw_results={"diff -du": self.DIFF_TEXT},
         )
         assert result.exit_code == 0
         assert "main.cpp" in result.output
         assert "new line added" in result.output
         assert "old line removed" in result.output
 
-    def test_empty_diff(self):
+    def test_sa_prefilter_error_falls_through(self):
+        """If diff -sa fails, falls through to diff -du directly."""
         result = self._invoke(
-            tagged_results={"diff": []},
-            raw_results={"diff": ""},
+            tagged_results={
+                "diff -sa": P4Error("some error"),
+            },
+            raw_results={"diff -du": self.DIFF_TEXT},
+        )
+        assert result.exit_code == 0
+        assert "main.cpp" in result.output
+
+    def test_du_error_not_opened(self):
+        """diff -du error 'not opened' → no differences."""
+        result = self._invoke(
+            tagged_results={
+                "diff -sa": P4Error("some error"),
+            },
+            raw_results={
+                "diff -du": P4Error("file(s) not opened for edit"),
+            },
         )
         assert result.exit_code == 0
         assert "no differences" in result.output
+
+    def test_du_empty_output(self):
+        """diff -du returns empty string → no differences."""
+        result = self._invoke(
+            tagged_results={
+                "diff -sa": [{"depotFile": "//depot/myproject/src/main.cpp"}],
+            },
+            raw_results={"diff -du": ""},
+        )
+        assert result.exit_code == 0
+        assert "no differences" in result.output
+
+    def test_cl_flag_uses_opened(self):
+        """With -c flag, uses 'p4 opened -c CL' to get files, then diffs them."""
+        result = self._invoke(
+            args=["-c", "12345"],
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/main.cpp"},
+                ],
+            },
+            raw_results={"diff -du": self.DIFF_TEXT},
+        )
+        assert result.exit_code == 0
+        assert "main.cpp" in result.output
+        assert "new line added" in result.output
+
+    def test_cl_flag_empty_changelist(self):
+        """With -c flag and no files in CL → shows message."""
+        result = self._invoke(
+            args=["-c", "99999"],
+            tagged_results={"opened": []},
+        )
+        assert result.exit_code == 0
+        assert "no files" in result.output
 
 
 # ── p5 sync ──────────────────────────────────────────────────────────────────

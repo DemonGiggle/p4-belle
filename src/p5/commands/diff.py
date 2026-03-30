@@ -1,6 +1,7 @@
 """p5 diff — colored unified diff output."""
 from __future__ import annotations
 
+import os
 import re
 
 import click
@@ -19,8 +20,6 @@ _HEADER_RE = re.compile(r"^==== (.+?)#(\d+) ")
 
 def _render_diff(raw: str) -> None:
     """Parse and pretty-print a p4 diff output."""
-    current_file: str | None = None
-
     for line in raw.splitlines():
         # p4 diff file header: ==== //depot/.../foo.cpp#41 (text)
         m = _HEADER_RE.match(line)
@@ -28,10 +27,9 @@ def _render_diff(raw: str) -> None:
             rel = any_to_rel(m.group(1))
             rev = m.group(2)
             console.rule(
-                Text(f"diff {rel}  (#{rev} → working copy)", style=theme.DIFF_HEADER),
+                Text(f"diff {rel}  (#{rev} \u2192 working copy)", style=theme.DIFF_HEADER),
                 style="dim",
             )
-            current_file = rel
             continue
 
         if line.startswith("--- "):
@@ -55,6 +53,28 @@ def _render_diff(raw: str) -> None:
             console.print(line)
 
 
+def _get_cl_files(cl: str) -> list[str]:
+    """Get depot file paths opened in a specific changelist."""
+    try:
+        records = run_p4_tagged(["opened", "-c", cl])
+    except P4Error:
+        return []
+    return [r["depotFile"] for r in records if r.get("depotFile")]
+
+
+def _get_changed_files(path: str) -> list[str] | None:
+    """Use 'p4 diff -sa' to find files that actually differ.
+
+    Returns a list of depot paths, or None if the pre-filter failed
+    (caller should fall back to full diff).
+    """
+    try:
+        records = run_p4_tagged(["diff", "-sa", path])
+        return [r["depotFile"] for r in records if r.get("depotFile")]
+    except P4Error:
+        return None
+
+
 from p5.completion import complete_opened_files, complete_pending_cls  # noqa: E402
 
 
@@ -68,42 +88,34 @@ def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool) -> None:
     """Show colored diff of opened files."""
     if not show_all:
         check_cwd_in_workspace()
-    import os
 
+    # Determine which files to diff
     if files:
-        # Explicit files — diff them directly
+        # Explicit files — use them directly
         diff_targets = [os.path.abspath(f) for f in files]
+    elif cl:
+        # Specific changelist — get its files via p4 opened -c
+        diff_targets = _get_cl_files(cl)
+        if not diff_targets:
+            console.print("[dim]no files in this changelist[/dim]")
+            return
     elif show_all:
         diff_targets = ["//..."]
     else:
         diff_targets = [os.getcwd().rstrip("/") + "/..."]
 
-    # Fast path: ask p4 which files actually differ before computing
-    # full diffs. 'p4 diff -sa' is much faster than 'p4 diff -du' on
-    # large workspaces because it only stats files, not reads content.
-    if not files:
-        try:
-            sa_args = ["diff", "-sa"]
-            if cl:
-                sa_args += ["-c", cl]
-            sa_args += diff_targets
-            changed = run_p4_tagged(sa_args)
+    # Fast path for directory-wide diffs: pre-filter to only files that
+    # actually differ. 'p4 diff -sa' is fast (stat only, no content read).
+    if not files and not cl:
+        changed = _get_changed_files(diff_targets[0])
+        if changed is not None:
             if not changed:
                 console.print("[dim]no differences[/dim]")
                 return
-            # Use only the files that actually differ
-            diff_targets = [r.get("depotFile", "") for r in changed if r.get("depotFile")]
-            if not diff_targets:
-                console.print("[dim]no differences[/dim]")
-                return
-        except P4Error:
-            pass  # fall through to full diff
+            diff_targets = changed
 
-    args = ["diff", "-du"]
-    if cl:
-        args += ["-c", cl]
-    args += diff_targets
-
+    # Run the actual unified diff
+    args = ["diff", "-du"] + diff_targets
     try:
         raw = run_p4(args)
     except P4Error as e:
