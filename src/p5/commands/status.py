@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -11,7 +12,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel, check_cwd_in_workspace, get_workspace
+from p5.workspace import check_cwd_in_workspace, get_workspace
 
 console = Console()
 
@@ -33,54 +34,42 @@ def _render_file_line(action: str, rel_path: str) -> Text:
     return t
 
 
-def _resolve_excludes(excludes: tuple[str, ...]) -> list[str]:
-    """Resolve exclude paths to be relative to the workspace root.
+def _to_cwd_rel(rec: dict) -> str:
+    """Get a cwd-relative display path from a p4 record.
 
-    Users specify excludes relative to cwd (e.g. ``-x foo``), but
-    displayed paths from ``any_to_rel`` are relative to the workspace
-    root (e.g. ``appsrc/foo/file.cpp``).  Convert each exclude so it
-    matches the workspace-root-relative paths.
+    Prefers clientFile (absolute local path) for accurate cwd-relative
+    display.  Falls back to depotFile → workspace-relative if clientFile
+    is unavailable.
     """
-    from pathlib import Path
-
+    cwd = os.getcwd()
+    client_file = rec.get("clientFile", "")
+    if client_file:
+        return os.path.relpath(client_file, cwd)
+    # Fallback: depot path → workspace-relative → cwd-relative
+    depot_file = rec.get("depotFile", "")
     ws = get_workspace()
-    cwd = Path(os.getcwd()).resolve()
-    resolved: list[str] = []
-    for ex in excludes:
-        abs_ex = (cwd / ex).resolve()
-        try:
-            rel = str(abs_ex.relative_to(ws.client_root)).replace(os.sep, "/")
-        except ValueError:
-            # Fallback: use as-is (may be an absolute or depot path)
-            rel = ex
-        resolved.append(rel.rstrip("/"))
-    return resolved
+    prefix = ws.depot_prefix.rstrip("/") + "/"
+    if depot_file.startswith(prefix):
+        ws_rel = depot_file[len(prefix):]
+    else:
+        return depot_file  # can't resolve, show raw
+    abs_path = Path(ws.client_root) / ws_rel
+    return os.path.relpath(str(abs_path), cwd)
 
 
-def _is_excluded(rel_path: str, excludes: list[str]) -> bool:
-    """Check if rel_path starts with any of the exclude prefixes."""
+def _is_excluded(rel_path: str, excludes: tuple[str, ...]) -> bool:
+    """Check if a cwd-relative path starts with any exclude prefix.
+
+    Both rel_path and excludes are relative to cwd, so direct prefix
+    matching works.
+    """
     for ex in excludes:
-        if rel_path == ex or rel_path.startswith(ex + "/"):
+        ex_clean = ex.rstrip("/")
+        if ex_clean == ".":
+            return True  # '.' means everything under cwd
+        if rel_path == ex_clean or rel_path.startswith(ex_clean + "/"):
             return True
     return False
-
-
-def _to_cwd_rel(ws_rel_path: str) -> str:
-    """Convert a workspace-root-relative path to a cwd-relative path.
-
-    E.g. if cwd is ``<root>/appsrc`` and path is ``appsrc/foo/bar.cpp``,
-    returns ``foo/bar.cpp``.  Falls back to the original path if cwd is
-    not a parent.
-    """
-    from pathlib import Path
-
-    ws = get_workspace()
-    cwd = Path(os.getcwd()).resolve()
-    abs_path = Path(ws.client_root) / ws_rel_path
-    try:
-        return str(abs_path.relative_to(cwd)).replace(os.sep, "/")
-    except ValueError:
-        return ws_rel_path
 
 
 @click.command()
@@ -121,19 +110,16 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     except P4Error:
         reconcile = []
 
-    # Resolve exclude paths relative to cwd → workspace root
-    resolved_excludes = _resolve_excludes(excludes) if excludes else []
-
     # Group opened files by changelist, applying excludes
-    # Display paths are relative to cwd (not workspace root)
+    # All paths are relative to cwd for both display and exclude matching
     cl_files: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for rec in opened:
-        cl   = rec.get("change", "default")
-        ws_rel = any_to_rel(rec.get("depotFile", ""))
+        cl     = rec.get("change", "default")
+        rel    = _to_cwd_rel(rec)
         action = rec.get("action", "edit")
-        if resolved_excludes and _is_excluded(ws_rel, resolved_excludes):
+        if excludes and _is_excluded(rel, excludes):
             continue
-        cl_files[cl].append((action, _to_cwd_rel(ws_rel)))
+        cl_files[cl].append((action, rel))
 
     # Print default CL first
     if "default" in cl_files:
@@ -159,10 +145,10 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     filtered_reconcile: list[tuple[str, str]] = []
     if reconcile:
         for rec in reconcile:
-            ws_rel = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
-            if resolved_excludes and _is_excluded(ws_rel, resolved_excludes):
+            rel = _to_cwd_rel(rec)
+            if excludes and _is_excluded(rel, excludes):
                 continue
-            filtered_reconcile.append((_to_cwd_rel(ws_rel), rec.get("action", "?")))
+            filtered_reconcile.append((rel, rec.get("action", "?")))
 
     if not cl_files and not filtered_reconcile:
         console.print("[dim]nothing to commit, working tree clean[/dim]")

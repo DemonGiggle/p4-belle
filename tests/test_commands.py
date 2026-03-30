@@ -78,13 +78,13 @@ def _make_p4_dispatcher(tagged_results=None, raw_results=None):
 # ── p5 status ────────────────────────────────────────────────────────────────
 
 class TestStatusCmd:
-    def _invoke(self, args=None, **dispatcher_kwargs):
+    def _invoke(self, args=None, cwd=None, **dispatcher_kwargs):
         fake_run, fake_tagged = _make_p4_dispatcher(**dispatcher_kwargs)
         patches = [
             patch("p5.p4.run_p4", fake_run),
             patch("p5.commands.status.run_p4_tagged", fake_tagged),
             patch("p5.workspace.run_p4", fake_run),
-            patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
+            patch("os.getcwd", return_value=cwd or f"{FAKE_ROOT}/src"),
         ]
         for p in patches:
             p.start()
@@ -114,8 +114,12 @@ class TestStatusCmd:
         result = self._invoke(
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/main.cpp", "action": "edit", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/util.cpp", "action": "add", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/main.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/main.cpp",
+                     "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/util.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/util.cpp",
+                     "action": "add", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -130,7 +134,9 @@ class TestStatusCmd:
         result = self._invoke(
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/a.cpp", "action": "edit", "change": "12345"},
+                    {"depotFile": "//depot/myproject/src/a.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/a.cpp",
+                     "action": "edit", "change": "12345"},
                 ],
                 "reconcile": [],
             }
@@ -143,7 +149,9 @@ class TestStatusCmd:
             tagged_results={
                 "opened": P4Error("file(s) not opened on this client"),
                 "reconcile": [
-                    {"depotFile": "//depot/myproject/src/new.cpp", "action": "add"},
+                    {"depotFile": "//depot/myproject/src/new.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/new.cpp",
+                     "action": "add"},
                 ],
             }
         )
@@ -152,13 +160,20 @@ class TestStatusCmd:
         assert "Local changes not opened" in result.output
 
     def test_exclude_single_path(self):
-        """--exclude hides matching opened files (cwd-relative)."""
+        """--exclude hides matching opened files (cwd-relative).
+
+        cwd = FAKE_ROOT/src, so '-x bar' matches 'bar/b.cpp' (cwd-relative).
+        """
         result = self._invoke(
             args=["-x", "bar"],
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/bar/b.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+                     "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -173,9 +188,15 @@ class TestStatusCmd:
             args=["-x", "bar", "-x", "foo"],
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "add", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/baz/c.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/bar/b.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+                     "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "action": "add", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/baz/c.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/baz/c.cpp",
+                     "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -191,8 +212,12 @@ class TestStatusCmd:
             args=["-x", "bar/bar2"],
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/bar/bar2/deep.cpp", "action": "edit", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/bar/bar3/keep.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/bar/bar2/deep.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/bar/bar2/deep.cpp",
+                     "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/bar/bar3/keep.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/bar/bar3/keep.cpp",
+                     "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -202,16 +227,18 @@ class TestStatusCmd:
         assert "deep.cpp" not in result.output
 
     def test_exclude_all_shows_clean(self):
-        """Excluding everything results in 'working tree clean'.
+        """Excluding current dir hides everything → 'working tree clean'.
 
-        cwd is FAKE_ROOT/src, so '-x .' resolves to 'src' which covers
-        all files under src/.
+        cwd = FAKE_ROOT/src, file is src/a.cpp → cwd-relative is 'a.cpp'.
+        '-x .' matches all files under cwd.
         """
         result = self._invoke(
             args=["-x", "."],
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/a.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/a.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/a.cpp",
+                     "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -226,8 +253,12 @@ class TestStatusCmd:
             tagged_results={
                 "opened": P4Error("file(s) not opened on this client"),
                 "reconcile": [
-                    {"depotFile": "//depot/myproject/src/vendor/lib.cpp", "action": "add"},
-                    {"depotFile": "//depot/myproject/src/app/main.cpp", "action": "add"},
+                    {"depotFile": "//depot/myproject/src/vendor/lib.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/vendor/lib.cpp",
+                     "action": "add"},
+                    {"depotFile": "//depot/myproject/src/app/main.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/app/main.cpp",
+                     "action": "add"},
                 ],
             }
         )
@@ -241,8 +272,12 @@ class TestStatusCmd:
             args=["-x", "foo/a.cpp"],
             tagged_results={
                 "opened": [
-                    {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "edit", "change": "default"},
-                    {"depotFile": "//depot/myproject/src/foo/b.cpp", "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/a.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "action": "edit", "change": "default"},
+                    {"depotFile": "//depot/myproject/src/foo/b.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/foo/b.cpp",
+                     "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
             }
@@ -250,6 +285,61 @@ class TestStatusCmd:
         assert result.exit_code == 0
         assert "b.cpp" in result.output
         assert "a.cpp" not in result.output
+
+    def test_exclude_from_different_cwd(self):
+        """Same exclude value behaves differently depending on cwd.
+
+        When cwd = FAKE_ROOT (workspace root), '-x bar' does NOT match
+        'src/bar/b.cpp' because the cwd-relative path is 'src/bar/b.cpp'.
+        You'd need '-x src/bar' to exclude it.
+        """
+        opened = [
+            {"depotFile": "//depot/myproject/src/bar/b.cpp",
+             "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+             "action": "edit", "change": "default"},
+            {"depotFile": "//depot/myproject/src/foo/a.cpp",
+             "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+             "action": "edit", "change": "default"},
+        ]
+
+        # From workspace root: '-x bar' does NOT match (path is src/bar/...)
+        result = self._invoke(
+            args=["-x", "bar"],
+            cwd=FAKE_ROOT,
+            tagged_results={"opened": opened, "reconcile": []},
+        )
+        assert result.exit_code == 0
+        assert "b.cpp" in result.output  # not excluded
+
+        # From workspace root: '-x src/bar' DOES match
+        result2 = self._invoke(
+            args=["-x", "src/bar"],
+            cwd=FAKE_ROOT,
+            tagged_results={"opened": opened, "reconcile": []},
+        )
+        assert result2.exit_code == 0
+        assert "b.cpp" not in result2.output  # excluded
+        assert "a.cpp" in result2.output  # kept
+
+    def test_paths_displayed_relative_to_cwd(self):
+        """Output paths should be relative to cwd, not workspace root.
+
+        cwd = FAKE_ROOT/src, so 'src/foo/main.cpp' → 'foo/main.cpp'.
+        """
+        result = self._invoke(
+            tagged_results={
+                "opened": [
+                    {"depotFile": "//depot/myproject/src/foo/main.cpp",
+                     "clientFile": f"{FAKE_ROOT}/src/foo/main.cpp",
+                     "action": "edit", "change": "default"},
+                ],
+                "reconcile": [],
+            }
+        )
+        assert result.exit_code == 0
+        assert "foo/main.cpp" in result.output
+        # Should NOT contain workspace-root-relative path
+        assert "src/foo/main.cpp" not in result.output
 
 
 # ── p5 diff ──────────────────────────────────────────────────────────────────
