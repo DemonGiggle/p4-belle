@@ -11,7 +11,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.p4 import P4Error, run_p4_tagged
-from p5.workspace import any_to_rel, check_cwd_in_workspace
+from p5.workspace import any_to_rel, check_cwd_in_workspace, get_workspace
 
 console = Console()
 
@@ -33,12 +33,34 @@ def _render_file_line(action: str, rel_path: str) -> Text:
     return t
 
 
+def _resolve_excludes(excludes: tuple[str, ...]) -> list[str]:
+    """Resolve exclude paths to be relative to the workspace root.
+
+    Users specify excludes relative to cwd (e.g. ``-x foo``), but
+    displayed paths from ``any_to_rel`` are relative to the workspace
+    root (e.g. ``appsrc/foo/file.cpp``).  Convert each exclude so it
+    matches the workspace-root-relative paths.
+    """
+    from pathlib import Path
+
+    ws = get_workspace()
+    cwd = Path(os.getcwd()).resolve()
+    resolved: list[str] = []
+    for ex in excludes:
+        abs_ex = (cwd / ex).resolve()
+        try:
+            rel = str(abs_ex.relative_to(ws.client_root)).replace(os.sep, "/")
+        except ValueError:
+            # Fallback: use as-is (may be an absolute or depot path)
+            rel = ex
+        resolved.append(rel.rstrip("/"))
+    return resolved
+
+
 def _is_excluded(rel_path: str, excludes: list[str]) -> bool:
     """Check if rel_path starts with any of the exclude prefixes."""
     for ex in excludes:
-        # Normalize: strip trailing slashes for prefix matching
-        ex_clean = ex.rstrip("/")
-        if rel_path == ex_clean or rel_path.startswith(ex_clean + "/"):
+        if rel_path == ex or rel_path.startswith(ex + "/"):
             return True
     return False
 
@@ -81,13 +103,16 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     except P4Error:
         reconcile = []
 
+    # Resolve exclude paths relative to cwd → workspace root
+    resolved_excludes = _resolve_excludes(excludes) if excludes else []
+
     # Group opened files by changelist, applying excludes
     cl_files: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for rec in opened:
         cl   = rec.get("change", "default")
         rel  = any_to_rel(rec.get("depotFile", ""))
         action = rec.get("action", "edit")
-        if excludes and _is_excluded(rel, list(excludes)):
+        if resolved_excludes and _is_excluded(rel, resolved_excludes):
             continue
         cl_files[cl].append((action, rel))
 
@@ -116,7 +141,7 @@ def status_cmd(path: str | None, show_all: bool, excludes: tuple[str, ...]) -> N
     if reconcile:
         for rec in reconcile:
             rel = any_to_rel(rec.get("depotFile", rec.get("clientFile", "")))
-            if excludes and _is_excluded(rel, list(excludes)):
+            if resolved_excludes and _is_excluded(rel, resolved_excludes):
                 continue
             filtered_reconcile.append((rel, rec.get("action", "?")))
 

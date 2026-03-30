@@ -152,9 +152,9 @@ class TestStatusCmd:
         assert "Local changes not opened" in result.output
 
     def test_exclude_single_path(self):
-        """--exclude hides matching opened files."""
+        """--exclude hides matching opened files (cwd-relative)."""
         result = self._invoke(
-            args=["-x", "src/bar"],
+            args=["-x", "bar"],
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
@@ -170,7 +170,7 @@ class TestStatusCmd:
     def test_exclude_multiple_paths(self):
         """Multiple --exclude flags each filter their prefix."""
         result = self._invoke(
-            args=["-x", "src/bar", "-x", "src/foo"],
+            args=["-x", "bar", "-x", "foo"],
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/b.cpp", "action": "edit", "change": "default"},
@@ -188,7 +188,7 @@ class TestStatusCmd:
     def test_exclude_nested_path(self):
         """--exclude bar/bar2 excludes bar/bar2/ but not bar/bar3/."""
         result = self._invoke(
-            args=["-x", "src/bar/bar2"],
+            args=["-x", "bar/bar2"],
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/bar2/deep.cpp", "action": "edit", "change": "default"},
@@ -202,9 +202,13 @@ class TestStatusCmd:
         assert "deep.cpp" not in result.output
 
     def test_exclude_all_shows_clean(self):
-        """Excluding everything results in 'working tree clean'."""
+        """Excluding everything results in 'working tree clean'.
+
+        cwd is FAKE_ROOT/src, so '-x .' resolves to 'src' which covers
+        all files under src/.
+        """
         result = self._invoke(
-            args=["-x", "src"],
+            args=["-x", "."],
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/a.cpp", "action": "edit", "change": "default"},
@@ -218,7 +222,7 @@ class TestStatusCmd:
     def test_exclude_applies_to_reconcile(self):
         """--exclude also filters reconcile/untracked results."""
         result = self._invoke(
-            args=["-x", "src/vendor"],
+            args=["-x", "vendor"],
             tagged_results={
                 "opened": P4Error("file(s) not opened on this client"),
                 "reconcile": [
@@ -234,7 +238,7 @@ class TestStatusCmd:
     def test_exclude_exact_file_match(self):
         """--exclude matches exact file path, not just directories."""
         result = self._invoke(
-            args=["-x", "src/foo/a.cpp"],
+            args=["-x", "foo/a.cpp"],
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/foo/a.cpp", "action": "edit", "change": "default"},
