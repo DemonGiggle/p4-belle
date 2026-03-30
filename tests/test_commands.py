@@ -115,10 +115,10 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/main.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/main.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/main.cpp",
                      "action": "edit", "change": "default"},
                     {"depotFile": "//depot/myproject/src/util.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/util.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/util.cpp",
                      "action": "add", "change": "default"},
                 ],
                 "reconcile": [],
@@ -135,7 +135,7 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/a.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/a.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/a.cpp",
                      "action": "edit", "change": "12345"},
                 ],
                 "reconcile": [],
@@ -150,7 +150,7 @@ class TestStatusCmd:
                 "opened": P4Error("file(s) not opened on this client"),
                 "reconcile": [
                     {"depotFile": "//depot/myproject/src/new.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/new.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/new.cpp",
                      "action": "add"},
                 ],
             }
@@ -169,10 +169,10 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/b.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/bar/b.cpp",
                      "action": "edit", "change": "default"},
                     {"depotFile": "//depot/myproject/src/foo/a.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/foo/a.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
@@ -189,13 +189,13 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/b.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/bar/b.cpp",
                      "action": "edit", "change": "default"},
                     {"depotFile": "//depot/myproject/src/foo/a.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/foo/a.cpp",
                      "action": "add", "change": "default"},
                     {"depotFile": "//depot/myproject/src/baz/c.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/baz/c.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/baz/c.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
@@ -213,10 +213,10 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/bar/bar2/deep.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/bar/bar2/deep.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/bar/bar2/deep.cpp",
                      "action": "edit", "change": "default"},
                     {"depotFile": "//depot/myproject/src/bar/bar3/keep.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/bar/bar3/keep.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/bar/bar3/keep.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
@@ -237,7 +237,7 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/a.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/a.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/a.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
@@ -254,10 +254,10 @@ class TestStatusCmd:
                 "opened": P4Error("file(s) not opened on this client"),
                 "reconcile": [
                     {"depotFile": "//depot/myproject/src/vendor/lib.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/vendor/lib.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/vendor/lib.cpp",
                      "action": "add"},
                     {"depotFile": "//depot/myproject/src/app/main.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/app/main.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/app/main.cpp",
                      "action": "add"},
                 ],
             }
@@ -273,10 +273,10 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/foo/a.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/foo/a.cpp",
                      "action": "edit", "change": "default"},
                     {"depotFile": "//depot/myproject/src/foo/b.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/foo/b.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/foo/b.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],
@@ -295,10 +295,10 @@ class TestStatusCmd:
         """
         opened = [
             {"depotFile": "//depot/myproject/src/bar/b.cpp",
-             "clientFile": f"{FAKE_ROOT}/src/bar/b.cpp",
+             "clientFile": f"//{FAKE_CLIENT}/src/bar/b.cpp",
              "action": "edit", "change": "default"},
             {"depotFile": "//depot/myproject/src/foo/a.cpp",
-             "clientFile": f"{FAKE_ROOT}/src/foo/a.cpp",
+             "clientFile": f"//{FAKE_CLIENT}/src/foo/a.cpp",
              "action": "edit", "change": "default"},
         ]
 
@@ -330,7 +330,7 @@ class TestStatusCmd:
             tagged_results={
                 "opened": [
                     {"depotFile": "//depot/myproject/src/foo/main.cpp",
-                     "clientFile": f"{FAKE_ROOT}/src/foo/main.cpp",
+                     "clientFile": f"//{FAKE_CLIENT}/src/foo/main.cpp",
                      "action": "edit", "change": "default"},
                 ],
                 "reconcile": [],

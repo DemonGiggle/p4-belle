@@ -37,24 +37,36 @@ def _render_file_line(action: str, rel_path: str) -> Text:
 def _to_cwd_rel(rec: dict) -> str:
     """Get a cwd-relative display path from a p4 record.
 
-    Prefers clientFile (absolute local path) for accurate cwd-relative
-    display.  Falls back to depotFile → workspace-relative if clientFile
-    is unavailable.
+    Tries clientFile and depotFile, converting either to a local absolute
+    path via the workspace mapping, then makes it relative to cwd.
     """
+    ws = get_workspace()
     cwd = os.getcwd()
+
+    # Try clientFile first — may be //client/... syntax or absolute local
     client_file = rec.get("clientFile", "")
     if client_file:
-        return os.path.relpath(client_file, cwd)
+        if client_file.startswith("//"):
+            # Client-syntax path: //client-name/rest → strip to get ws-relative
+            # e.g. //my-ws/src/foo.cpp → src/foo.cpp
+            client_prefix = "//" + ws.client_name + "/"
+            if client_file.startswith(client_prefix):
+                ws_rel = client_file[len(client_prefix):]
+                abs_path = str(Path(ws.client_root) / ws_rel)
+                return os.path.relpath(abs_path, cwd)
+        else:
+            # Absolute local path
+            return os.path.relpath(client_file, cwd)
+
     # Fallback: depot path → workspace-relative → cwd-relative
     depot_file = rec.get("depotFile", "")
-    ws = get_workspace()
     prefix = ws.depot_prefix.rstrip("/") + "/"
     if depot_file.startswith(prefix):
         ws_rel = depot_file[len(prefix):]
-    else:
-        return depot_file  # can't resolve, show raw
-    abs_path = Path(ws.client_root) / ws_rel
-    return os.path.relpath(str(abs_path), cwd)
+        abs_path = str(Path(ws.client_root) / ws_rel)
+        return os.path.relpath(abs_path, cwd)
+
+    return depot_file  # can't resolve, show raw
 
 
 def _is_excluded(rel_path: str, excludes: tuple[str, ...]) -> bool:
