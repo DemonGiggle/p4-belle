@@ -26,6 +26,7 @@ def run_p4(args: list[str], *, cwd: str | None = None, check: bool = True) -> st
             capture_output=True,
             text=True,
             cwd=cwd,
+            stdin=subprocess.DEVNULL,
         )
     except FileNotFoundError:
         raise P4Error("p4 command not found — is Perforce installed and on PATH?")
