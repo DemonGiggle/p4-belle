@@ -153,7 +153,7 @@ async def test_select_all_deselect_all():
 async def test_filter_mode_focus():
     """Pressing '/' should focus the filter input; Escape returns focus to the list."""
     from p5.tui.change_app import ChangeApp
-    from textual.widgets import Input, ListView
+    from textual.widgets import Input, ListView, Static
 
     patches = _make_patches()
     for p in patches:
@@ -171,6 +171,11 @@ async def test_filter_mode_focus():
             focused = app.focused
             assert isinstance(focused, Input), f"Expected Input focused, got {type(focused)}"
             assert app._filtering is True
+            filter_input = app.query_one("#filter-input", Input)
+            filter_bar = app.query_one("#filter-bar", Static)
+            assert filter_input.has_class("visible")
+            assert filter_bar.has_class("visible")
+            assert filter_bar.has_class("active")
 
             # Escape should exit filter mode and return focus to ListView
             await pilot.press("escape")
@@ -179,6 +184,8 @@ async def test_filter_mode_focus():
             assert app._filtering is False
             focused = app.focused
             assert isinstance(focused, ListView), f"Expected ListView focused, got {type(focused)}"
+            assert not filter_input.has_class("visible")
+            assert not filter_bar.has_class("visible")
     finally:
         for p in patches:
             p.stop()

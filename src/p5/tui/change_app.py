@@ -242,13 +242,16 @@ class ChangeApp(App):
     #filter-bar  { display: none; background: $primary; padding: 0 1;
                    dock: bottom; height: 1; }
     #filter-bar.visible { display: block; }
+    #filter-bar.active { text-style: bold; }
     #filter-input {
         display: none;
         dock: bottom;
-        height: auto;
+        height: 1;
         margin: 0;
         border: none;
         padding: 0 1;
+        background: $boost;
+        color: $text;
     }
     #filter-input.visible { display: block; }
     #file-list { height: 1fr; }
@@ -495,8 +498,12 @@ class ChangeApp(App):
         fb = self.query_one("#filter-bar", Static)
         if self._filtering:
             text = self._filter_buf
+            fb.update(f"[bold]filter:[/bold] {_esc(text)}▏")
+            fb.add_class("visible")
+            fb.add_class("active")
         else:
             text = self._filter_text
+            fb.remove_class("active")
         if text:
             fb.update(f"[bold]filter:[/bold] {_esc(text)}")
             fb.add_class("visible")
