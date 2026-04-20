@@ -192,6 +192,37 @@ async def test_filter_mode_focus():
 
 
 @pytest.mark.asyncio
+async def test_filter_layout_shows_search_field_above_footer():
+    """Filter mode should allocate a visible input row above the filter bar/footer."""
+    from p5.tui.change_app import ChangeApp
+    from textual.widgets import Input, Static
+
+    patches = _make_patches()
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("slash")
+            await pilot.pause()
+
+            filter_input = app.query_one("#filter-input", Input)
+            filter_bar = app.query_one("#filter-bar", Static)
+            footer_bar = app.query_one("#footer-bar", Static)
+
+            assert filter_input.display is True
+            assert filter_bar.display is True
+            assert filter_input.region.height == 1
+            assert filter_bar.region.height == 1
+            assert filter_input.region.y + filter_input.region.height <= filter_bar.region.y
+            assert filter_bar.region.y + filter_bar.region.height <= footer_bar.region.y
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
 async def test_filter_narrows_list():
     """Typing in filter mode should narrow the displayed files."""
     from p5.tui.change_app import ChangeApp, FileItem

@@ -237,15 +237,14 @@ class ChangeApp(App):
     """Manage files in the default changelist — select, group, and move."""
 
     CSS = """
-    #header-bar  { background: $surface; padding: 0 1; }
-    #footer-bar  { background: $surface; padding: 0 1; dock: bottom; height: 2; }
-    #filter-bar  { display: none; background: $primary; padding: 0 1;
-                   dock: bottom; height: 1; }
+    Screen { layout: vertical; }
+    #header-bar  { background: $surface; padding: 0 1; height: 1; }
+    #footer-bar  { background: $surface; padding: 0 1; height: 2; }
+    #filter-bar  { display: none; background: $primary; padding: 0 1; height: 1; }
     #filter-bar.visible { display: block; }
     #filter-bar.active { text-style: bold; }
     #filter-input {
         display: none;
-        dock: bottom;
         height: 1;
         margin: 0;
         border: none;
@@ -254,7 +253,7 @@ class ChangeApp(App):
         color: $text;
     }
     #filter-input.visible { display: block; }
-    #file-list { height: 1fr; }
+    #file-list { height: 1fr; min-height: 1; }
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
@@ -539,9 +538,10 @@ class ChangeApp(App):
         if text:
             fb.update(f"[bold]filter:[/bold] {_esc(text)}")
             fb.add_class("visible")
-        else:
-            fb.update("")
-            fb.remove_class("visible")
+            return
+
+        fb.update("")
+        fb.remove_class("visible")
 
     @on(Input.Changed, "#filter-input")
     def on_filter_changed(self, event: Input.Changed) -> None:
