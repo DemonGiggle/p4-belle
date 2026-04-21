@@ -6,6 +6,7 @@ import os
 import click
 from rich.console import Console
 
+from p5.dummy_data import build_changes_records
 from p5.p4 import P4Error
 from p5.workspace import check_cwd_in_workspace
 
@@ -21,13 +22,26 @@ console = Console()
               help="Filter by CL status")
 @click.option("-a", "--all", "show_all", is_flag=True,
               help="Show changes across entire depot")
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
 def changes_cmd(path: str | None, user: str | None, max_cls: int,
-                cl_status: str, show_all: bool) -> None:
+                cl_status: str, show_all: bool, dummy_data: bool) -> None:
     """Browse changelist history in an interactive TUI.
 
     By default, shows changes touching the current directory.
     Use -a / --all for the entire depot, or pass a specific path.
     """
+    if dummy_data:
+        from p5.tui.changes_app import ChangesApp
+        ChangesApp(
+            user=user,
+            max_cls=max_cls,
+            cl_status=cl_status,
+            p4_path="//...",
+            demo_records=build_changes_records(),
+        ).run()
+        return
+
     if not show_all:
         check_cwd_in_workspace()
     if show_all:

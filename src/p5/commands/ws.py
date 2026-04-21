@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 from rich.text import Text
 
+from p5.dummy_data import build_ws_records, render_ws
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 
@@ -26,12 +27,22 @@ def _get_current_client() -> str:
               help="List workspaces for a specific user (default: current user)")
 @click.option("--no-tui", is_flag=True,
               help="Print workspace list without the interactive selector")
-def ws_cmd(user: str | None, no_tui: bool) -> None:
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
+def ws_cmd(user: str | None, no_tui: bool, dummy_data: bool) -> None:
     """List and switch Perforce client workspaces.
 
     Launches an interactive selector by default. Press Enter to switch,
     q to quit without switching.
     """
+    if dummy_data:
+        if not no_tui:
+            from p5.tui.ws_app import WorkspaceApp
+            WorkspaceApp(user=user, demo_records=build_ws_records()).run()
+            return
+        render_ws()
+        return
+
     if no_tui:
         _print_list(user)
         return

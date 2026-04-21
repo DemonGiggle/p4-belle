@@ -11,6 +11,7 @@ A Perforce CLI with git-like UX — relative paths, colored output, and interact
 - **Interactive `changes` browser** — navigate changelists with `j/k`, expand syntax-highlighted diffs with `Enter`
 - **Interactive workspace selector** (`p5 ws`) — list all client workspaces and switch with `Enter`
 - **Tab completion** — file paths, depot paths, and changelist numbers for bash, zsh, and fish
+- **Dummy data mode** — pass `--dummy-data` to any supported command to render sample output without touching Perforce
 - Zero configuration — depot root is detected automatically from `p4 info`
 
 ## Requirements
@@ -62,6 +63,8 @@ Completions supported:
 - `p5 diff -c`, `p5 delete -c`, `p5 submit -c`, `p5 change` — completes pending CLs
 
 ## Commands
+
+Most commands also accept `--dummy-data`, which prints representative sample output so you can demo or debug the command path without a live Perforce workspace.
 
 ### `p5 status`
 

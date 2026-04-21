@@ -22,9 +22,9 @@ from p5.workspace import any_to_rel
 class FileRecord:
     __slots__ = ("depot_file", "rel_path", "action")
 
-    def __init__(self, depot_file: str, action: str) -> None:
+    def __init__(self, depot_file: str, action: str, rel_path: str | None = None) -> None:
         self.depot_file = depot_file
-        self.rel_path = any_to_rel(depot_file)
+        self.rel_path = rel_path or any_to_rel(depot_file)
         self.action = action
 
 
@@ -438,8 +438,11 @@ class SubmitApp(App):
         Binding("q",      "quit",        "Quit"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, pending_cls: list[PendingCL] | None = None, *, demo_mode: bool = False) -> None:
         super().__init__()
+        self._demo_cls = pending_cls
+        self._demo_mode = demo_mode
+        self._demo_submitted_cl = 123490
         self._cls: list[PendingCL] = []
         self._current_cl: PendingCL | None = None   # None = CL list view
         self._list_data: list[PendingCL | FileRecord | None] = []  # None = header
@@ -482,6 +485,10 @@ class SubmitApp(App):
 
     @work(thread=True)
     def _load_cls(self) -> None:
+        if self._demo_cls is not None:
+            self._cls = list(self._demo_cls)
+            self.call_from_thread(self._show_cl_list)
+            return
         try:
             cls = _fetch_pending_cls()
         except P4Error:
@@ -546,6 +553,9 @@ class SubmitApp(App):
     def _reload_current_cl(self) -> None:
         pcl = self._current_cl
         if not pcl:
+            return
+        if self._demo_cls is not None:
+            self.call_from_thread(self._show_cl_detail, pcl)
             return
         pcl.files = _load_cl_files(pcl.cl)
         if pcl.cl == "default":
@@ -616,6 +626,9 @@ class SubmitApp(App):
         item = self._current_item()
         if not isinstance(item, FileRecord):
             return
+        if self._demo_mode:
+            self._move_demo_file(item)
+            return
         self.push_screen(
             MoveFilesScreen([item], self._current_cl.cl),
             self._on_move_done,
@@ -649,6 +662,9 @@ class SubmitApp(App):
 
     @work(thread=True)
     def _do_revert(self, files: list[FileRecord]) -> None:
+        if self._demo_mode:
+            self._demo_revert(files)
+            return
         try:
             depot_files = [f.depot_file for f in files]
             run_p4(["revert"] + depot_files)
@@ -685,6 +701,13 @@ class SubmitApp(App):
         pcl = self._current_cl
         if not pcl:
             return
+        if self._demo_mode:
+            unchanged = [f for f in pcl.files if f.action == "edit"]
+            if not unchanged:
+                self.call_from_thread(self.notify, "No unchanged demo files", severity="warning")
+                return
+            self._demo_revert(unchanged)
+            return
         try:
             run_p4(["revert", "-a", "-c", pcl.cl, "//..."])
             self.call_from_thread(
@@ -713,6 +736,13 @@ class SubmitApp(App):
     def _save_desc(self, new_desc: str) -> None:
         pcl = self._current_cl
         if not pcl:
+            return
+        if self._demo_mode:
+            pcl.description = new_desc
+            self.call_from_thread(
+                self.notify, "Description updated (demo mode)", severity="information"
+            )
+            self.call_from_thread(self._show_cl_detail, pcl)
             return
         try:
             # Fetch current spec, update description, write back
@@ -759,6 +789,18 @@ class SubmitApp(App):
     def _run_submit(self) -> None:
         pcl = self._current_cl
         if not pcl:
+            return
+        if self._demo_mode:
+            self._demo_submitted_cl += 1
+            submitted_cl = str(self._demo_submitted_cl)
+            self._cls = [cl for cl in self._cls if cl is not pcl]
+            self._current_cl = None
+            self.call_from_thread(
+                self.notify,
+                f"Submitted demo changelist as CL {submitted_cl}",
+                severity="information",
+            )
+            self.call_from_thread(self._show_cl_list)
             return
         try:
             submit_args = ["submit"] if pcl.cl == "default" else ["submit", "-c", pcl.cl]
@@ -836,3 +878,31 @@ class SubmitApp(App):
             event.stop()
         else:
             return  # let unhandled keys pass through
+
+    def _move_demo_file(self, item: FileRecord) -> None:
+        if not self._current_cl:
+            return
+        targets = [cl for cl in self._cls if cl is not self._current_cl]
+        if not targets:
+            self.notify("No target demo changelist", severity="warning")
+            return
+        target = targets[0]
+        self._current_cl.files = [f for f in self._current_cl.files if f is not item]
+        target.files.append(item)
+        self.notify(
+            f"Moved to {'default changelist' if target.cl == 'default' else 'CL ' + target.cl} (demo mode)",
+            severity="information",
+        )
+        self._show_cl_detail(self._current_cl)
+
+    def _demo_revert(self, files: list[FileRecord]) -> None:
+        pcl = self._current_cl
+        if not pcl:
+            return
+        to_remove = set(id(f) for f in files)
+        count = len(to_remove)
+        pcl.files = [f for f in pcl.files if id(f) not in to_remove]
+        self.call_from_thread(
+            self.notify, f"Reverted {count} file(s) (demo mode)", severity="information"
+        )
+        self.call_from_thread(self._show_cl_detail, pcl)

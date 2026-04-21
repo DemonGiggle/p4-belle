@@ -9,6 +9,7 @@ from rich.text import Text
 
 from p5 import theme
 from p5.completion import complete_depot_path
+from p5.dummy_data import render_sync
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.workspace import any_to_rel, check_cwd_in_workspace
 
@@ -26,12 +27,18 @@ _REV_RE     = re.compile(r"^(.+?)#(\d+) - is sync'd at #(\d+)")
 @click.option("-f", "--force", is_flag=True, help="Force resync")
 @click.option("-n", "--dry-run", "dry_run", is_flag=True, help="Preview only")
 @click.option("-a", "--all", "sync_all", is_flag=True, help="Sync entire depot (//...)")
-def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool) -> None:
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
+def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool, dummy_data: bool) -> None:
     """Sync current directory to head (or a specific path/revision).
 
     With no arguments, syncs the current directory recursively.
     Use -a / --all to sync the entire depot.
     """
+    if dummy_data:
+        render_sync()
+        return
+
     if not sync_all:
         check_cwd_in_workspace()
     import os

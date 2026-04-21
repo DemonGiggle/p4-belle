@@ -342,12 +342,14 @@ class ChangesApp(App):
         max_cls: int = 50,
         cl_status: str = "submitted",
         p4_path: str = "//...",
+        demo_records: list[ChangeRecord] | None = None,
     ) -> None:
         super().__init__()
         self._user      = user
         self._max_cls   = max_cls
         self._cl_status = cl_status
         self._p4_path   = p4_path
+        self._demo_records = demo_records
         self._records:  list[ChangeRecord] = []
         self._filtered: list[ChangeRecord] = []
         self._filter_buf: str = ""
@@ -376,6 +378,11 @@ class ChangesApp(App):
 
     @work(thread=True)
     def _load_changes(self) -> None:
+        if self._demo_records is not None:
+            self._records = list(self._demo_records)
+            self._run_filter()
+            self.call_from_thread(self._rebuild_list)
+            return
         try:
             records = _fetch_changes(self._user, self._max_cls, self._cl_status, self._p4_path)
             self._records = records
@@ -538,6 +545,10 @@ class ChangesApp(App):
 
     @work(thread=True)
     def _load_detail(self, rec: ChangeRecord) -> None:
+        if self._demo_records is not None:
+            dv = self.query_one("#detail-view", DiffView)
+            self.call_from_thread(dv.update_content, rec)
+            return
         _fetch_detail(rec)
         dv = self.query_one("#detail-view", DiffView)
         self.call_from_thread(dv.update_content, rec)

@@ -15,6 +15,7 @@ from rich.text import Text
 
 from p5 import theme
 from p5.completion import complete_depot_path
+from p5.dummy_data import render_status
 from p5.p4 import P4Error, run_p4_tagged
 from p5.workspace import Workspace, check_cwd_in_workspace, get_workspace
 
@@ -190,17 +191,24 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
               help="Also check for untracked edits/adds/deletes (slow — scans disk)")
 @click.option("-x", "--exclude", "excludes", multiple=True,
               help="Exclude paths matching this prefix (repeatable)")
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
 def status_cmd(
     path: str | None,
     show_all: bool,
     do_reconcile: bool,
     excludes: tuple[str, ...],
+    dummy_data: bool,
 ) -> None:
     """Show pending changes in the current directory (like git status).
 
     By default only shows files explicitly opened in p4 (fast).
     Use -r to also scan for untracked local changes.
     """
+    if dummy_data:
+        render_status()
+        return
+
     _dbg(f"invoked: path={path!r} show_all={show_all!r} do_reconcile={do_reconcile!r} excludes={excludes!r}")
 
     t0 = time.monotonic()

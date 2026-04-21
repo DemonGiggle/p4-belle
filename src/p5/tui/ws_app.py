@@ -180,9 +180,10 @@ class WorkspaceApp(App):
 
     filter_text: reactive[str] = reactive("")
 
-    def __init__(self, user: str | None = None) -> None:
+    def __init__(self, user: str | None = None, demo_records: list[ClientRecord] | None = None) -> None:
         super().__init__()
         self._user = user
+        self._demo_records = demo_records
         self._records: list[ClientRecord] = []
         self._filtered: list[ClientRecord] = []
         self._switched_to: str | None = None
@@ -211,6 +212,10 @@ class WorkspaceApp(App):
 
     @work(thread=True)
     def _load(self) -> None:
+        if self._demo_records is not None:
+            self._records = list(self._demo_records)
+            self.call_from_thread(self._apply_filter)
+            return
         try:
             records = _fetch_clients(self._user)
             self._records = records
@@ -310,6 +315,22 @@ class WorkspaceApp(App):
 
     @work(thread=True)
     def _do_switch(self, rec: ClientRecord) -> None:
+        if self._demo_records is not None:
+            if rec.is_current:
+                self.call_from_thread(
+                    self._set_status,
+                    f"[dim]{rec.name} is already the active workspace[/dim]",
+                )
+                return
+            self._switched_to = rec.name
+            for r in self._records:
+                r.is_current = (r.name == rec.name)
+            self.call_from_thread(self._rebuild_list)
+            self.call_from_thread(
+                self._set_status,
+                f"[{T.ADDED}]✓ switched to {rec.name}[/{T.ADDED}]  [dim](demo mode)[/dim]",
+            )
+            return
         if rec.is_current:
             self.call_from_thread(
                 self._set_status,
