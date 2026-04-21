@@ -26,6 +26,34 @@ def build_diff_groups() -> dict[str, list]:
                 file_type="text",
                 display_path="src/auth/login.cpp",
             ),
+            FileEntry(
+                depot_path="//depot/demo/src/auth/session.cpp",
+                local_path="/tmp/p5-demo/src/auth/session.cpp",
+                action="edit",
+                file_type="text",
+                display_path="src/auth/session.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/net/socket.cpp",
+                local_path="/tmp/p5-demo/src/net/socket.cpp",
+                action="edit",
+                file_type="text",
+                display_path="src/net/socket.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/net/retry.cpp",
+                local_path="/tmp/p5-demo/src/net/retry.cpp",
+                action="edit",
+                file_type="text",
+                display_path="src/net/retry.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/ui/login_view.cpp",
+                local_path="/tmp/p5-demo/src/ui/login_view.cpp",
+                action="edit",
+                file_type="text",
+                display_path="src/ui/login_view.cpp",
+            ),
         ],
         GROUP_ADDED: [
             FileEntry(
@@ -35,6 +63,20 @@ def build_diff_groups() -> dict[str, list]:
                 file_type="text",
                 display_path="src/auth/token_cache.cpp",
             ),
+            FileEntry(
+                depot_path="//depot/demo/src/auth/retry_cache.cpp",
+                local_path="/tmp/p5-demo/src/auth/retry_cache.cpp",
+                action="add",
+                file_type="text",
+                display_path="src/auth/retry_cache.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/tools/demo_seed.cpp",
+                local_path="/tmp/p5-demo/src/tools/demo_seed.cpp",
+                action="add",
+                file_type="text",
+                display_path="src/tools/demo_seed.cpp",
+            ),
         ],
         GROUP_DELETED: [
             FileEntry(
@@ -43,6 +85,20 @@ def build_diff_groups() -> dict[str, list]:
                 action="delete",
                 file_type="text",
                 display_path="src/legacy/old_auth.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/legacy/old_policy.cpp",
+                local_path="",
+                action="delete",
+                file_type="text",
+                display_path="src/legacy/old_policy.cpp",
+            ),
+            FileEntry(
+                depot_path="//depot/demo/src/legacy/old_login_ui.cpp",
+                local_path="",
+                action="delete",
+                file_type="text",
+                display_path="src/legacy/old_login_ui.cpp",
             ),
         ],
     }
@@ -59,11 +115,47 @@ def build_diff_cache() -> dict[str, list[tuple[str, str]]]:
             ("-old_log(user);", T.DIFF_DEL),
             (" return check_token(user);", ""),
         ],
+        "//depot/demo/src/auth/session.cpp": [
+            ("@@ -22,6 +22,9 @@", f"bold {T.DIFF_HUNK}"),
+            (" if (!session.valid()) return false;", ""),
+            ("+session.refresh();", T.DIFF_ADD),
+            ("+session.touch();", T.DIFF_ADD),
+            (" return session.persist();", ""),
+        ],
+        "//depot/demo/src/net/socket.cpp": [
+            ("@@ -50,4 +50,5 @@", f"bold {T.DIFF_HUNK}"),
+            (" connect_once();", ""),
+            ("+record_backoff_metric();", T.DIFF_ADD),
+            (" return true;", ""),
+        ],
+        "//depot/demo/src/net/retry.cpp": [
+            ("@@ -1,5 +1,7 @@", f"bold {T.DIFF_HUNK}"),
+            (" int attempts = 0;", ""),
+            ("+const int max_attempts = 5;", T.DIFF_ADD),
+            ("-const int max_attempts = 3;", T.DIFF_DEL),
+            (" while (attempts < max_attempts) {}", ""),
+        ],
+        "//depot/demo/src/ui/login_view.cpp": [
+            ("@@ -80,3 +80,5 @@", f"bold {T.DIFF_HUNK}"),
+            (" render_header();", ""),
+            ("+render_retry_hint();", T.DIFF_ADD),
+            (" render_form();", ""),
+        ],
         "//depot/demo/src/auth/token_cache.cpp": [
             ("new file: src/auth/token_cache.cpp", f"bold {T.DIFF_ADD}"),
             ("+class TokenCache {", T.DIFF_ADD),
             ("+    bool warm = true;", T.DIFF_ADD),
             ("+};", T.DIFF_ADD),
+        ],
+        "//depot/demo/src/auth/retry_cache.cpp": [
+            ("new file: src/auth/retry_cache.cpp", f"bold {T.DIFF_ADD}"),
+            ("+struct RetryCache {", T.DIFF_ADD),
+            ("+    int attempts = 0;", T.DIFF_ADD),
+            ("+};", T.DIFF_ADD),
+        ],
+        "//depot/demo/src/tools/demo_seed.cpp": [
+            ("new file: src/tools/demo_seed.cpp", f"bold {T.DIFF_ADD}"),
+            ("+void seed_demo_data();", T.DIFF_ADD),
         ],
         "//depot/demo/src/legacy/old_auth.cpp": [
             ("deleted file: src/legacy/old_auth.cpp", f"bold {T.DIFF_DEL}"),
@@ -71,13 +163,21 @@ def build_diff_cache() -> dict[str, list[tuple[str, str]]]:
             ("-    return 0;", T.DIFF_DEL),
             ("-}", T.DIFF_DEL),
         ],
+        "//depot/demo/src/legacy/old_policy.cpp": [
+            ("deleted file: src/legacy/old_policy.cpp", f"bold {T.DIFF_DEL}"),
+            ("-bool legacy_policy_enabled();", T.DIFF_DEL),
+        ],
+        "//depot/demo/src/legacy/old_login_ui.cpp": [
+            ("deleted file: src/legacy/old_login_ui.cpp", f"bold {T.DIFF_DEL}"),
+            ("-void render_old_login_ui();", T.DIFF_DEL),
+        ],
     }
 
 
 def build_changes_records() -> list:
     from p5.tui.changes_app import ChangeRecord
 
-    return [
+    records = [
         ChangeRecord(
             cl="123472",
             date="2026-04-20",
@@ -138,6 +238,31 @@ def build_changes_records() -> list:
             loaded=True,
         ),
     ]
+    records.extend(
+        ChangeRecord(
+            cl=str(123468 - i),
+            date=f"2026-04-{19 - (i % 7):02d}",
+            user=["alice", "bob", "carol", "dave"][i % 4],
+            description=f"Demo follow-up change {i + 1} for paging and filtering",
+            status="submitted",
+            files=[
+                ("edit", f"src/demo/module_{i}/file_{i}.cpp"),
+                ("add", f"src/demo/module_{i}/helper_{i}.h"),
+            ],
+            diff=_demo_change_diff(
+                f"src/demo/module_{i}/file_{i}.cpp",
+                [
+                    "@@ -1,2 +1,3 @@",
+                    " int main() {",
+                    "+    return 0;",
+                    " }",
+                ],
+            ),
+            loaded=True,
+        )
+        for i in range(12)
+    )
+    return records
 
 
 def build_change_files() -> list:
@@ -148,6 +273,16 @@ def build_change_files() -> list:
         FileRecord("//depot/demo/src/auth/token_cache.cpp", "add", "src/auth/token_cache.cpp"),
         FileRecord("//depot/demo/src/net/socket.cpp", "edit", "src/net/socket.cpp"),
         FileRecord("//depot/demo/src/legacy/old_auth.cpp", "delete", "src/legacy/old_auth.cpp"),
+        FileRecord("//depot/demo/src/auth/session.cpp", "edit", "src/auth/session.cpp"),
+        FileRecord("//depot/demo/src/auth/retry_cache.cpp", "add", "src/auth/retry_cache.cpp"),
+        FileRecord("//depot/demo/src/net/retry.cpp", "edit", "src/net/retry.cpp"),
+        FileRecord("//depot/demo/src/ui/login_view.cpp", "edit", "src/ui/login_view.cpp"),
+        FileRecord("//depot/demo/src/ui/login_state.cpp", "edit", "src/ui/login_state.cpp"),
+        FileRecord("//depot/demo/src/data/session_store.cpp", "edit", "src/data/session_store.cpp"),
+        FileRecord("//depot/demo/src/data/session_store.h", "add", "src/data/session_store.h"),
+        FileRecord("//depot/demo/src/tools/demo_seed.cpp", "add", "src/tools/demo_seed.cpp"),
+        FileRecord("//depot/demo/src/legacy/old_policy.cpp", "delete", "src/legacy/old_policy.cpp"),
+        FileRecord("//depot/demo/src/legacy/old_login_ui.cpp", "delete", "src/legacy/old_login_ui.cpp"),
     ]
 
 
@@ -161,6 +296,10 @@ def build_submit_cls() -> list:
             [
                 FileRecord("//depot/demo/src/auth/login.cpp", "edit", "src/auth/login.cpp"),
                 FileRecord("//depot/demo/src/auth/token_cache.cpp", "add", "src/auth/token_cache.cpp"),
+                FileRecord("//depot/demo/src/auth/session.cpp", "edit", "src/auth/session.cpp"),
+                FileRecord("//depot/demo/src/ui/login_view.cpp", "edit", "src/ui/login_view.cpp"),
+                FileRecord("//depot/demo/src/net/retry.cpp", "edit", "src/net/retry.cpp"),
+                FileRecord("//depot/demo/src/net/socket.cpp", "edit", "src/net/socket.cpp"),
             ],
         ),
         PendingCL(
@@ -169,8 +308,43 @@ def build_submit_cls() -> list:
             [
                 FileRecord("//depot/demo/src/auth/retry_cache.cpp", "edit", "src/auth/retry_cache.cpp"),
                 FileRecord("//depot/demo/src/auth/retry_ui.cpp", "add", "src/auth/retry_ui.cpp"),
+                FileRecord("//depot/demo/src/auth/retry_policy.cpp", "edit", "src/auth/retry_policy.cpp"),
+                FileRecord("//depot/demo/src/auth/retry_policy.h", "add", "src/auth/retry_policy.h"),
             ],
         ),
+        PendingCL(
+            "123461",
+            "UI polish for auth states",
+            [
+                FileRecord("//depot/demo/src/ui/login_state.cpp", "edit", "src/ui/login_state.cpp"),
+                FileRecord("//depot/demo/src/ui/login_dialog.cpp", "edit", "src/ui/login_dialog.cpp"),
+                FileRecord("//depot/demo/src/ui/login_dialog.h", "add", "src/ui/login_dialog.h"),
+            ],
+        ),
+        PendingCL(
+            "123462",
+            "Legacy cleanup demo batch",
+            [
+                FileRecord("//depot/demo/src/legacy/old_auth.cpp", "delete", "src/legacy/old_auth.cpp"),
+                FileRecord("//depot/demo/src/legacy/old_policy.cpp", "delete", "src/legacy/old_policy.cpp"),
+                FileRecord("//depot/demo/src/legacy/old_login_ui.cpp", "delete", "src/legacy/old_login_ui.cpp"),
+            ],
+        ),
+        *[
+            PendingCL(
+                str(123463 + i),
+                f"Additional demo changelist {i + 1} for pagination",
+                [
+                    FileRecord(
+                        f"//depot/demo/src/demo/cl_{i}/file_{j}.cpp",
+                        "edit" if j % 2 == 0 else "add",
+                        f"src/demo/cl_{i}/file_{j}.cpp",
+                    )
+                    for j in range(1, 4)
+                ],
+            )
+            for i in range(8)
+        ],
     ]
 
 
@@ -203,6 +377,69 @@ def build_ws_records() -> list:
             description="Release branch validation",
             access="2026-04-18",
             update="2026-04-18",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-feature-auth",
+            root="/home/gigo/workspace/feature-auth",
+            host="desktop",
+            description="Feature branch for auth rewrite",
+            access="2026-04-17",
+            update="2026-04-17",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-staging",
+            root="/home/gigo/workspace/staging",
+            host="staging-box",
+            description="Staging validation workspace",
+            access="2026-04-16",
+            update="2026-04-16",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-ux-demo",
+            root="/home/gigo/workspace/ux-demo",
+            host="laptop",
+            description="UI walkthrough workspace",
+            access="2026-04-15",
+            update="2026-04-15",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-hotfix",
+            root="/home/gigo/workspace/hotfix",
+            host="desktop",
+            description="Hotfix validation",
+            access="2026-04-14",
+            update="2026-04-14",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-benchmark",
+            root="/home/gigo/workspace/benchmark",
+            host="perf-lab",
+            description="Performance comparison workspace",
+            access="2026-04-13",
+            update="2026-04-13",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-archive",
+            root="/home/gigo/workspace/archive",
+            host="backup-node",
+            description="Archive and migration workspace",
+            access="2026-04-12",
+            update="2026-04-12",
+            is_current=False,
+        ),
+        ClientRecord(
+            name="gigo-sandbox",
+            root="/home/gigo/workspace/sandbox",
+            host="tablet",
+            description="Scratch sandbox for demos",
+            access="2026-04-11",
+            update="2026-04-11",
             is_current=False,
         ),
     ]

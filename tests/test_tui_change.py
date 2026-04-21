@@ -222,6 +222,76 @@ async def test_filter_narrows_list():
 
 
 @pytest.mark.asyncio
+async def test_filter_updates_on_every_character():
+    """Each typed character should immediately update the visible filtered list."""
+    from p5.tui.change_app import ChangeApp, FileItem
+    from textual.widgets import Input
+
+    opened = [
+        {"depotFile": f"{FAKE_PREFIX}/src/alpha.cpp", "action": "edit", "change": "default"},
+        {"depotFile": f"{FAKE_PREFIX}/src/alpine.cpp", "action": "edit", "change": "default"},
+        {"depotFile": f"{FAKE_PREFIX}/src/beta.cpp", "action": "add", "change": "default"},
+    ]
+
+    def fake_run_p4(args, *, cwd=None, check=True):
+        joined = " ".join(args)
+        if "info" in joined:
+            return FAKE_P4_INFO_RAW
+        if "client -o" in joined:
+            return FAKE_P4_CLIENT_RAW
+        return ""
+
+    def fake_tagged(args, *, cwd=None):
+        if "opened" in " ".join(args):
+            return opened
+        return []
+
+    patches = [
+        patch("p5.p4.run_p4", fake_run_p4),
+        patch("p5.tui.change_app.run_p4", fake_run_p4),
+        patch("p5.tui.change_app.run_p4_tagged", fake_tagged),
+        patch("p5.workspace.run_p4", fake_run_p4),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("slash")
+            await pilot.pause()
+            assert isinstance(app.focused, Input)
+
+            await pilot.press("a")
+            await pilot.pause()
+            assert app._filter_text == "a"
+            assert len(app.query(FileItem)) == 3
+            assert isinstance(app.focused, Input)
+
+            await pilot.press("l")
+            await pilot.pause()
+            assert app._filter_text == "al"
+            assert len(app.query(FileItem)) == 2
+            assert isinstance(app.focused, Input)
+
+            await pilot.press("p")
+            await pilot.pause()
+            assert app._filter_text == "alp"
+            assert len(app.query(FileItem)) == 2
+            assert isinstance(app.focused, Input)
+
+            await pilot.press("h")
+            await pilot.pause()
+            assert app._filter_text == "alph"
+            assert len(app.query(FileItem)) == 1
+            assert isinstance(app.focused, Input)
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
 async def test_filter_escape_clears():
     """Pressing Escape during filter should clear the filter and show all files again."""
     from p5.tui.change_app import ChangeApp, FileItem

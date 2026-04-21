@@ -532,9 +532,10 @@ class ChangeApp(App):
             fb.update(f"[bold]filter:[/bold] {_esc(text)}▏")
             fb.add_class("visible")
             fb.add_class("active")
-        else:
-            text = self._filter_text
-            fb.remove_class("active")
+            return
+
+        text = self._filter_text
+        fb.remove_class("active")
         if text:
             fb.update(f"[bold]filter:[/bold] {_esc(text)}")
             fb.add_class("visible")
@@ -549,6 +550,9 @@ class ChangeApp(App):
         self._update_filter_bar()
         self._run_filter()
         self._rebuild_list()
+        # Keep typing routed to the filter input while the list updates.
+        if self._filtering:
+            event.input.focus()
 
     @on(Input.Submitted, "#filter-input")
     def on_filter_submitted(self, event: Input.Submitted) -> None:
