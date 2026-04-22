@@ -18,6 +18,7 @@ from textual.widgets import Footer, RichLog, Static, Tab, Tabs
 
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
+from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.workspace import any_to_rel, check_cwd_in_workspace, get_workspace
 
@@ -48,6 +49,7 @@ class FileEntry:
     local_path: str  # absolute local path; may be empty for deleted files
     action: str      # p4 action: edit, add, delete, branch, move/add, move/delete
     file_type: str   # p4 type field, e.g. 'text', 'binary+x'
+    display_path: str = ""
 
     @property
     def is_binary(self) -> bool:
@@ -64,7 +66,7 @@ class FileEntry:
 
     @property
     def display_name(self) -> str:
-        return any_to_rel(self.depot_path)
+        return self.display_path or any_to_rel(self.depot_path)
 
 
 # ---------------------------------------------------------------------------
@@ -192,11 +194,15 @@ class DiffApp(App):
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, groups: dict[str, list[FileEntry]]) -> None:
+    def __init__(
+        self,
+        groups: dict[str, list[FileEntry]],
+        initial_cache: dict[str, list[tuple[str, str]]] | None = None,
+    ) -> None:
         super().__init__()
         self.groups = groups
         self._indices: dict[str, int] = {g: 0 for g in _GROUPS}
-        self._cache: dict[str, list[tuple[str, str]]] = {}
+        self._cache: dict[str, list[tuple[str, str]]] = dict(initial_cache or {})
         self._active_group: str = next(
             (g for g in _GROUPS if groups.get(g)), GROUP_MODIFIED
         )
@@ -349,9 +355,15 @@ def _build_entries(opened: list[dict]) -> list[FileEntry]:
               shell_complete=complete_pending_cls)
 @click.option("-a", "--all", "show_all", is_flag=True,
               help="Diff all opened files across the entire depot")
-def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool) -> None:
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
+def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool, dummy_data: bool) -> None:
     """Browse diffs of opened files in an interactive TUI."""
     _dbg(f"invoked: files={files!r} cl={cl!r} show_all={show_all!r}")
+
+    if dummy_data:
+        DiffApp(build_diff_groups(), initial_cache=build_diff_cache()).run()
+        return
 
     if not show_all:
         check_cwd_in_workspace()

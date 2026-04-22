@@ -667,3 +667,49 @@ class TestSubmitCmd:
         assert result.exit_code == 0
         assert "submitted" in result.output
         assert "12345" in result.output
+
+
+@pytest.mark.parametrize(
+    ("args", "needle"),
+    [
+        (["status", "--dummy-data"], "Changes to be submitted"),
+        (["delete", "--dummy-data"], "Files to be deleted"),
+        (["sync", "--dummy-data"], "Syncing src/auth to head"),
+        (["change", "123456", "--dummy-data"], "would open changelist 123456"),
+        (["change", "-d", "123456", "--dummy-data"], "Change 123456 deleted"),
+        (["submit", "-c", "123456", "--dummy-data"], "submitted"),
+        (["filelog", "--dummy-data"], "src/auth/login.cpp"),
+        (["ws", "--no-tui", "--dummy-data"], "gigo-main"),
+        (["completion", "--dummy-data"], "Enable p5 tab completion"),
+        (["completion", "--install", "--dummy-data"], "Dummy install mode"),
+    ],
+)
+def test_dummy_data_mode_for_non_tui_commands(args, needle):
+    from p5.cli import main
+
+    runner = CliRunner()
+    result = runner.invoke(main, args)
+
+    assert result.exit_code == 0
+    assert needle in result.output
+
+
+@pytest.mark.parametrize(
+    ("args", "patch_target"),
+    [
+        (["diff", "--dummy-data"], "p5.commands.diff.DiffApp.run"),
+        (["change", "--dummy-data"], "p5.tui.change_app.ChangeApp.run"),
+        (["submit", "--dummy-data"], "p5.tui.submit_app.SubmitApp.run"),
+        (["changes", "--dummy-data"], "p5.tui.changes_app.ChangesApp.run"),
+        (["ws", "--dummy-data"], "p5.tui.ws_app.WorkspaceApp.run"),
+    ],
+)
+def test_dummy_data_mode_launches_tui(args, patch_target):
+    from p5.cli import main
+
+    runner = CliRunner()
+    with patch(patch_target) as mock_run:
+        result = runner.invoke(main, args)
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()

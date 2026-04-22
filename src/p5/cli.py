@@ -6,6 +6,7 @@ import sys
 import click
 from rich.console import Console
 
+from p5.dummy_data import render_completion
 from p5.p4 import P4Error
 
 console = Console()
@@ -67,7 +68,9 @@ _COMPLETION_PROFILES = {
 @main.command("completion")
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default=None, required=False)
 @click.option("--install", is_flag=True, help="Append completion line to your shell profile")
-def completion_cmd(shell: str | None, install: bool) -> None:
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of changing shell config")
+def completion_cmd(shell: str | None, install: bool, dummy_data: bool) -> None:
     """Print shell completion setup instructions (or install with --install).
 
     Auto-detects your shell from $SHELL, or pass bash/zsh/fish explicitly.
@@ -78,6 +81,10 @@ def completion_cmd(shell: str | None, install: bool) -> None:
       p5 completion zsh        # show instructions for zsh
       p5 completion --install  # append to ~/.bashrc (or ~/.zshrc etc.)
     """
+    if dummy_data:
+        render_completion(shell, install)
+        return
+
     import os
     from pathlib import Path
 

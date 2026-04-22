@@ -9,6 +9,7 @@ from rich.text import Text
 
 from p5 import theme
 from p5.completion import complete_depot_path
+from p5.dummy_data import render_filelog
 from p5.p4 import P4Error, run_p4_tagged
 from p5.workspace import any_to_rel, check_cwd_in_workspace, local_to_depot
 
@@ -16,11 +17,20 @@ console = Console()
 
 
 @click.command()
-@click.argument("file", shell_complete=complete_depot_path)
+@click.argument("file", default=None, required=False, shell_complete=complete_depot_path)
 @click.option("-n", "--max-revisions", "max_rev", default=20, show_default=True,
               help="Max number of revisions to show")
-def filelog_cmd(file: str, max_rev: int) -> None:
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
+def filelog_cmd(file: str | None, max_rev: int, dummy_data: bool) -> None:
     """Show revision history of a file (git log style)."""
+    if dummy_data:
+        render_filelog()
+        return
+
+    if file is None:
+        raise click.UsageError("Missing argument 'FILE'")
+
     check_cwd_in_workspace()
     depot_path = local_to_depot(file)
     rel        = any_to_rel(depot_path)

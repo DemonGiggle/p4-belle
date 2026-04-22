@@ -22,9 +22,9 @@ from p5.workspace import any_to_rel
 class FileRecord:
     __slots__ = ("depot_file", "rel_path", "action")
 
-    def __init__(self, depot_file: str, action: str) -> None:
+    def __init__(self, depot_file: str, action: str, rel_path: str | None = None) -> None:
         self.depot_file = depot_file
-        self.rel_path = any_to_rel(depot_file)
+        self.rel_path = rel_path or any_to_rel(depot_file)
         self.action = action
 
 
@@ -269,8 +269,11 @@ class ChangeApp(App):
         Binding("q",      "quit",         "Quit"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, files: list[FileRecord] | None = None, *, demo_mode: bool = False) -> None:
         super().__init__()
+        self._demo_files = files
+        self._demo_mode = demo_mode
+        self._demo_next_cl = 123480
         self._files: list[FileRecord] = []
         self._selected: set[str] = set()          # depot paths
         self._filtered: list[FileRecord] = []
@@ -304,6 +307,11 @@ class ChangeApp(App):
 
     @work(thread=True)
     def _load_files(self) -> None:
+        if self._demo_files is not None:
+            self._files = list(self._demo_files)
+            self._run_filter()
+            self.call_from_thread(self._rebuild_list)
+            return
         try:
             records = run_p4_tagged(["opened", "-c", "default"])
         except P4Error:
@@ -426,6 +434,18 @@ class ChangeApp(App):
         if not self._selected:
             self.notify("No files selected", severity="warning")
             return
+        if self._demo_mode:
+            self._demo_next_cl += 1
+            moved = [f for f in self._files if f.depot_file in self._selected]
+            self._files = [f for f in self._files if f.depot_file not in self._selected]
+            self._selected.clear()
+            self._run_filter()
+            self._rebuild_list()
+            self.notify(
+                f"Created demo CL {self._demo_next_cl} with {len(moved)} file(s)",
+                severity="information",
+            )
+            return
         files = [f for f in self._files if f.depot_file in self._selected]
         self.push_screen(NewCLScreen(files), self._on_new_cl)
 
@@ -440,6 +460,17 @@ class ChangeApp(App):
             return
         if not self._selected:
             self.notify("No files selected", severity="warning")
+            return
+        if self._demo_mode:
+            moved = [f for f in self._files if f.depot_file in self._selected]
+            self._files = [f for f in self._files if f.depot_file not in self._selected]
+            self._selected.clear()
+            self._run_filter()
+            self._rebuild_list()
+            self.notify(
+                f"Moved {len(moved)} file(s) to demo CL 123460",
+                severity="information",
+            )
             return
         files = [f for f in self._files if f.depot_file in self._selected]
         self.push_screen(CLSelectorScreen(files), self._on_move)
@@ -501,9 +532,10 @@ class ChangeApp(App):
             fb.update(f"[bold]filter:[/bold] {_esc(text)}▏")
             fb.add_class("visible")
             fb.add_class("active")
-        else:
-            text = self._filter_text
-            fb.remove_class("active")
+            return
+
+        text = self._filter_text
+        fb.remove_class("active")
         if text:
             fb.update(f"[bold]filter:[/bold] {_esc(text)}")
             fb.add_class("visible")
@@ -518,6 +550,9 @@ class ChangeApp(App):
         self._update_filter_bar()
         self._run_filter()
         self._rebuild_list()
+        # Keep typing routed to the filter input while the list updates.
+        if self._filtering:
+            event.input.focus()
 
     @on(Input.Submitted, "#filter-input")
     def on_filter_submitted(self, event: Input.Submitted) -> None:
