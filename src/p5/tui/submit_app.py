@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re as _re
 import subprocess
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -173,7 +173,7 @@ class SectionHeader(ListItem):
 
 # ── Move Files Modal ──────────────────────────────────────────────────────────
 
-class MoveFilesScreen(ModalScreen[str | None]):
+class MoveFilesScreen(ModalScreen[Optional[str]]):
     """Pick a target changelist to move files into."""
 
     CSS = """
@@ -368,7 +368,7 @@ class SubmitConfirmScreen(ModalScreen[bool]):
 
 # ── Description Editor Modal ─────────────────────────────────────────────────
 
-class DescriptionScreen(ModalScreen[str | None]):
+class DescriptionScreen(ModalScreen[Optional[str]]):
     """Edit changelist description."""
 
     CSS = """

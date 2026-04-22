@@ -8,6 +8,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
 from p5.p4 import P4Error
 
@@ -149,3 +150,25 @@ def test_submit_app_filter_does_not_block_system_keys():
             next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
             assert next_line != "event.stop()", \
                 "SubmitApp.on_key should use `return` in the else branch, not `event.stop()`"
+
+
+def test_change_dummy_data_imports_on_python39():
+    """Dummy-data change TUI should import cleanly on Python 3.9."""
+    from p5.commands.change import change_cmd
+
+    runner = CliRunner()
+    with patch("p5.tui.change_app.ChangeApp.run", autospec=True, return_value=None):
+        result = runner.invoke(change_cmd, ["--dummy-data"])
+
+    assert result.exit_code == 0
+
+
+def test_submit_dummy_data_imports_on_python39():
+    """Dummy-data submit TUI should import cleanly on Python 3.9."""
+    from p5.commands.submit import submit_cmd
+
+    runner = CliRunner()
+    with patch("p5.tui.submit_app.SubmitApp.run", autospec=True, return_value=None):
+        result = runner.invoke(submit_cmd, ["--dummy-data"])
+
+    assert result.exit_code == 0

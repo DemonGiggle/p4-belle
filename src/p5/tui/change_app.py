@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re as _re
 import subprocess
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -62,7 +62,7 @@ class CLItem(ListItem):
 
 # ── CL Selector Modal ────────────────────────────────────────────────────────
 
-class CLSelectorScreen(ModalScreen[str | None]):
+class CLSelectorScreen(ModalScreen[Optional[str]]):
     """Pick a target changelist to move files into."""
 
     CSS = """
@@ -137,7 +137,7 @@ class CLSelectorScreen(ModalScreen[str | None]):
 
 # ── New CL Modal ─────────────────────────────────────────────────────────────
 
-class NewCLScreen(ModalScreen[str | None]):
+class NewCLScreen(ModalScreen[Optional[str]]):
     """Create a new changelist and move selected files into it."""
 
     CSS = """
