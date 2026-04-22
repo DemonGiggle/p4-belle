@@ -370,7 +370,14 @@ class ChangeApp(App):
         for i, d in enumerate(self._list_data):
             if d is not None:
                 lv.index = i
+                lv.call_after_refresh(self._sync_list_highlight)
                 break
+
+    def _sync_list_highlight(self) -> None:
+        lv = self.query_one("#file-list", ListView)
+        idx = lv.index
+        if idx is not None:
+            lv.watch_index(idx, idx)
 
     # ── current item ──────────────────────────────────────────────────────
 
@@ -559,9 +566,11 @@ class ChangeApp(App):
         self._filtering = False
         self._filter_buf = event.value
         self._filter_text = event.value
-        self._filter_just_committed = True
+        self._filter_just_committed = False
         self.query_one("#filter-input", Input).remove_class("visible")
-        self.query_one("#file-list", ListView).focus()
+        lv = self.query_one("#file-list", ListView)
+        lv.focus()
+        self._sync_list_highlight()
         self._update_filter_bar()
 
     def on_key(self, event) -> None:

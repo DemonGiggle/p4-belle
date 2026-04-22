@@ -407,6 +407,44 @@ async def test_filter_submit_returns_focus():
             assert app._filter_text == "beta"
             focused = app.focused
             assert isinstance(focused, ListView), f"Expected ListView, got {type(focused)}"
+            assert app._filter_just_committed is False
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_filter_submit_restores_highlight_to_first_result():
+    """Submitting a filter should leave the first visible file highlighted."""
+    from p5.tui.change_app import ChangeApp, FileItem
+    from textual.widgets import ListView
+
+    patches = _make_patches()
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("slash")
+            for ch in "beta":
+                await pilot.press(ch)
+            await pilot.press("enter")
+            await pilot.pause()
+
+            lv = app.query_one("#file-list", ListView)
+            highlighted = lv.highlighted_child
+
+            assert isinstance(app.focused, ListView)
+            assert len(app.query(FileItem)) == 1
+            assert lv.index is not None
+            assert isinstance(highlighted, FileItem)
+            assert highlighted.highlighted is True
+
+            await pilot.press("enter")
+            await pilot.pause()
+            assert len(app._selected) == 1
     finally:
         for p in patches:
             p.stop()
