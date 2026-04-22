@@ -119,17 +119,26 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
     cwd = os.getcwd()
 
     is_tty = sys.stderr.isatty()
+    cmd = ["reconcile", "-n", "-e", "-a", "-d", reconcile_path]
+    if not is_tty:
+        try:
+            return run_p4_tagged(cmd)
+        except P4Error as e:
+            if "no file(s) to reconcile" in str(e).lower():
+                return []
+            raise
+
     try:
         term_width = os.get_terminal_size().columns if is_tty else 80
     except OSError:
         term_width = 80
 
-    cmd = ["p4", "-ztag", "reconcile", "-n", "-e", "-a", "-d", reconcile_path]
-    _dbg(f"running (streaming): {' '.join(cmd)}")
+    popen_cmd = ["p4", "-ztag", *cmd]
+    _dbg(f"running (streaming): {' '.join(popen_cmd)}")
     t0 = time.monotonic()
 
     proc = subprocess.Popen(
-        cmd,
+        popen_cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -173,10 +182,17 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
         records.append(current)
 
     proc.wait()
+    stderr = proc.stderr.read() if proc.stderr is not None else ""
 
     if is_tty:
         # Erase the progress line
         print(f"\r{' ' * term_width}\r", end="", flush=True, file=sys.stderr)
+
+    if proc.returncode != 0:
+        msg = stderr.strip()
+        if "no file(s) to reconcile" in msg.lower():
+            return []
+        raise P4Error(msg or "p4 reconcile failed", proc.returncode)
 
     _dbg_elapsed(f"p4 reconcile (streaming) → {len(records)} record(s)", t0)
     return records
@@ -187,8 +203,7 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
                 shell_complete=complete_depot_path)
 @click.option("-a", "--all", "show_all", is_flag=True,
               help="Show entire depot, not just current directory")
-@click.option("-r", "--reconcile", "do_reconcile", is_flag=True,
-              help="Also check for untracked edits/adds/deletes (slow — scans disk)")
+@click.option("-r", "--reconcile", "_reconcile_flag", is_flag=True, hidden=True)
 @click.option("-x", "--exclude", "excludes", multiple=True,
               help="Exclude paths matching this prefix (repeatable)")
 @click.option("--dummy-data", is_flag=True,
@@ -196,20 +211,19 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
 def status_cmd(
     path: str | None,
     show_all: bool,
-    do_reconcile: bool,
+    _reconcile_flag: bool,
     excludes: tuple[str, ...],
     dummy_data: bool,
 ) -> None:
     """Show pending changes in the current directory (like git status).
 
-    By default only shows files explicitly opened in p4 (fast).
-    Use -r to also scan for untracked local changes.
+    Shows both opened files and local reconcile results.
     """
     if dummy_data:
         render_status()
         return
 
-    _dbg(f"invoked: path={path!r} show_all={show_all!r} do_reconcile={do_reconcile!r} excludes={excludes!r}")
+    _dbg(f"invoked: path={path!r} show_all={show_all!r} excludes={excludes!r}")
 
     t0 = time.monotonic()
     if not show_all:
@@ -248,15 +262,12 @@ def status_cmd(
         opened = [r for r in opened if _under(_local_abs(r, ws), filter_root)]
         _dbg(f"local filter: {before} → {len(opened)} record(s) under {filter_root!r}")
 
-    # Reconcile is opt-in: it walks the entire local tree (slow).
-    reconcile: list[dict] = []
-    if do_reconcile:
-        reconcile_path = (
-            "//..."
-            if filter_root is None
-            else filter_root.rstrip(os.sep) + "/..."
-        )
-        reconcile = _run_reconcile_with_progress(reconcile_path)
+    reconcile_path = (
+        "//..."
+        if filter_root is None
+        else filter_root.rstrip(os.sep) + "/..."
+    )
+    reconcile = _run_reconcile_with_progress(reconcile_path)
 
     # --- Render -----------------------------------------------------------------
 
@@ -320,7 +331,5 @@ def status_cmd(
     hint = "  [dim]use [/dim][bold]p4 edit <file>[/bold][dim] to open for edit, "
     hint += "[/dim][bold]p4 add <file>[/bold][dim] to mark new files, "
     hint += "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete"
-    if not do_reconcile:
-        hint += "  ([/dim][bold]p5 status -r[/bold][dim] to scan for untracked changes)"
     hint += "[/dim]"
     console.print(hint)

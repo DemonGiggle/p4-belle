@@ -345,6 +345,63 @@ def _build_entries(opened: list[dict]) -> list[FileEntry]:
     return entries
 
 
+def _scope_args(p4_path: str | None, files: tuple[str, ...]) -> list[str]:
+    if p4_path is not None:
+        return [p4_path]
+    return [os.path.abspath(f) for f in files]
+
+
+def _print_no_differences() -> None:
+    Console().print("[dim]no differences[/dim]")
+
+
+def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None) -> None:
+    scope_args = _scope_args(p4_path, files)
+
+    if cl:
+        opened_args = ["opened", "-c", cl, *scope_args]
+        _dbg(f"running: p4 {' '.join(opened_args)}")
+        try:
+            opened = run_p4_tagged(opened_args)
+        except P4Error as e:
+            if "not opened" in str(e).lower():
+                opened = []
+            else:
+                raise
+        if not opened:
+            Console().print("[dim]no files open[/dim]")
+            return
+        diff_targets = [rec.get("depotFile") or rec.get("clientFile", "") for rec in opened]
+    else:
+        diff_targets = scope_args
+        diff_sa_args = ["diff", "-sa", *scope_args]
+        _dbg(f"running: p4 {' '.join(diff_sa_args)}")
+        try:
+            changed = run_p4_tagged(diff_sa_args)
+        except P4Error:
+            changed = None
+        else:
+            if not changed:
+                _print_no_differences()
+                return
+
+    diff_du_args = ["diff", "-du", *diff_targets]
+    _dbg(f"running: p4 {' '.join(diff_du_args)}")
+    try:
+        raw = run_p4(diff_du_args)
+    except P4Error as e:
+        if "not opened" in str(e).lower():
+            _print_no_differences()
+            return
+        raise
+
+    if not raw.strip():
+        _print_no_differences()
+        return
+
+    click.echo(raw, nl=not raw.endswith("\n"))
+
+
 # ---------------------------------------------------------------------------
 # Click command
 # ---------------------------------------------------------------------------
@@ -377,6 +434,10 @@ def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool, dummy_data:
         p4_path = None
 
     _dbg(f"p4_path={p4_path!r}")
+
+    if not sys.stdout.isatty():
+        _run_cli_diff(p4_path, files, cl)
+        return
 
     try:
         if p4_path is not None:
