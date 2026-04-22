@@ -1,6 +1,8 @@
 """Shared dummy data renderers and datasets for CLI demos and debugging."""
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
@@ -12,6 +14,24 @@ console = Console()
 DEFAULT_CL = "123456"
 OTHER_CL = "123460"
 SUBMITTED_CL = "123472"
+LARGE_DUMMY_DATASET_SIZE = 120
+
+_DEMO_USERS = ("alice", "bob", "carol", "dave", "erin", "frank", "gigo", "heidi")
+_DEMO_HOSTS = ("build-box", "ci-runner", "desktop", "laptop", "perf-lab", "staging-box")
+_DEMO_AREAS = ("auth", "net", "ui", "data", "infra", "tools")
+_DEMO_ACTIONS = ("edit", "add", "delete")
+
+
+def _demo_date(offset: int) -> str:
+    return (date(2026, 4, 21) - timedelta(days=offset)).isoformat()
+
+
+def _fill_to_size(items: list, factories: list, target_size: int = LARGE_DUMMY_DATASET_SIZE) -> list:
+    idx = 0
+    while len(items) < target_size:
+        items.append(factories[idx]())
+        idx += 1
+    return items
 
 
 def build_diff_groups() -> dict[str, list]:
@@ -238,11 +258,11 @@ def build_changes_records() -> list:
             loaded=True,
         ),
     ]
-    records.extend(
+    records.extend([
         ChangeRecord(
             cl=str(123468 - i),
-            date=f"2026-04-{19 - (i % 7):02d}",
-            user=["alice", "bob", "carol", "dave"][i % 4],
+            date=_demo_date(i + 2),
+            user=_DEMO_USERS[i % len(_DEMO_USERS)],
             description=f"Demo follow-up change {i + 1} for paging and filtering",
             status="submitted",
             files=[
@@ -261,6 +281,37 @@ def build_changes_records() -> list:
             loaded=True,
         )
         for i in range(12)
+    ])
+    _fill_to_size(
+        records,
+        [
+            lambda i=i: ChangeRecord(
+                cl=str(123300 - i),
+                date=_demo_date(i + 14),
+                user=_DEMO_USERS[i % len(_DEMO_USERS)],
+                description=(
+                    f"{_DEMO_AREAS[i % len(_DEMO_AREAS)].title()} pagination sample "
+                    f"{i + 1} for scrolling and filtering"
+                ),
+                status="submitted",
+                files=[
+                    (_DEMO_ACTIONS[i % len(_DEMO_ACTIONS)], f"src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/demo_{i}.cpp"),
+                    ("edit", f"src/{_DEMO_AREAS[(i + 1) % len(_DEMO_AREAS)]}/helper_{i}.h"),
+                ],
+                diff=_demo_change_diff(
+                    f"src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/demo_{i}.cpp",
+                    [
+                        "@@ -3,3 +3,5 @@",
+                        " void refresh_demo_state() {",
+                        f'+    log_demo_metric("sample_{i}");',
+                        f"+    apply_demo_step({(i % 5) + 1});",
+                        " }",
+                    ],
+                ),
+                loaded=True,
+            )
+            for i in range(LARGE_DUMMY_DATASET_SIZE)
+        ],
     )
     return records
 
@@ -268,7 +319,7 @@ def build_changes_records() -> list:
 def build_change_files() -> list:
     from p5.tui.change_app import FileRecord
 
-    return [
+    files = [
         FileRecord("//depot/demo/src/auth/login.cpp", "edit", "src/auth/login.cpp"),
         FileRecord("//depot/demo/src/auth/token_cache.cpp", "add", "src/auth/token_cache.cpp"),
         FileRecord("//depot/demo/src/net/socket.cpp", "edit", "src/net/socket.cpp"),
@@ -284,12 +335,24 @@ def build_change_files() -> list:
         FileRecord("//depot/demo/src/legacy/old_policy.cpp", "delete", "src/legacy/old_policy.cpp"),
         FileRecord("//depot/demo/src/legacy/old_login_ui.cpp", "delete", "src/legacy/old_login_ui.cpp"),
     ]
+    _fill_to_size(
+        files,
+        [
+            lambda i=i: FileRecord(
+                f"//depot/demo/src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/bulk_{i}.cpp",
+                _DEMO_ACTIONS[i % len(_DEMO_ACTIONS)],
+                f"src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/bulk_{i}.cpp",
+            )
+            for i in range(LARGE_DUMMY_DATASET_SIZE)
+        ],
+    )
+    return files
 
 
 def build_submit_cls() -> list:
     from p5.tui.submit_app import FileRecord, PendingCL
 
-    return [
+    pending_cls = [
         PendingCL(
             "default",
             "Demo default changelist for the auth flow",
@@ -346,12 +409,31 @@ def build_submit_cls() -> list:
             for i in range(8)
         ],
     ]
+    _fill_to_size(
+        pending_cls,
+        [
+            lambda i=i: PendingCL(
+                str(123600 + i),
+                f"{_DEMO_AREAS[i % len(_DEMO_AREAS)].title()} follow-up batch {i + 1} for list density",
+                [
+                    FileRecord(
+                        f"//depot/demo/src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/submit_{i}_{j}.cpp",
+                        _DEMO_ACTIONS[(i + j) % len(_DEMO_ACTIONS)],
+                        f"src/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}/submit_{i}_{j}.cpp",
+                    )
+                    for j in range(1, 4)
+                ],
+            )
+            for i in range(LARGE_DUMMY_DATASET_SIZE)
+        ],
+    )
+    return pending_cls
 
 
 def build_ws_records() -> list:
     from p5.tui.ws_app import ClientRecord
 
-    return [
+    records = [
         ClientRecord(
             name="gigo-main",
             root="/home/gigo/workspace/main",
@@ -443,6 +525,25 @@ def build_ws_records() -> list:
             is_current=False,
         ),
     ]
+    _fill_to_size(
+        records,
+        [
+            lambda i=i: ClientRecord(
+                name=f"gigo-{_DEMO_AREAS[i % len(_DEMO_AREAS)]}-demo-{i:03d}",
+                root=f"/home/gigo/workspace/{_DEMO_AREAS[i % len(_DEMO_AREAS)]}-demo-{i:03d}",
+                host=_DEMO_HOSTS[i % len(_DEMO_HOSTS)],
+                description=(
+                    f"{_DEMO_AREAS[i % len(_DEMO_AREAS)].title()} dummy workspace "
+                    f"{i + 1} for scrolling and filter demos"
+                ),
+                access=_demo_date(i),
+                update=_demo_date(i),
+                is_current=False,
+            )
+            for i in range(LARGE_DUMMY_DATASET_SIZE)
+        ],
+    )
+    return records
 
 
 def render_status() -> None:
