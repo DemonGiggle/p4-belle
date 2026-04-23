@@ -65,19 +65,17 @@ def _reset_workspace():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BUG 1: _filter_just_committed flag gets stuck in ChangeApp
+# BUG 1: Enter after filter commit is swallowed in ChangeApp
 #
-# When the user commits a filter (Enter) that matches zero files,
-# ListView.Selected never fires, so _filter_just_committed stays True.
-# The next legitimate Enter on a list item is silently swallowed.
-#
-# Same bug pattern exists in ChangesApp and SubmitApp.
+# ChangeApp used to arm _filter_just_committed on filter submit even though
+# no spurious ListView.Selected event followed. That left the next legitimate
+# Enter silently swallowed.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_filter_just_committed_flag_gets_stuck():
+async def test_filter_submit_does_not_swallow_next_enter():
     """After committing a zero-result filter, the next Enter on a list item
-    should still work (toggle selection). Currently it's silently swallowed."""
+    should still work (toggle selection)."""
     from p5.tui.change_app import ChangeApp, FileItem
 
     opened = [
@@ -100,11 +98,10 @@ async def test_filter_just_committed_flag_gets_stuck():
             await pilot.pause()
             assert len(app.query(FileItem)) == 0
 
-            # Commit the filter — flag is set but never consumed
+            # Commit the filter — this should not leave stale suppression behind
             await pilot.press("enter")
             await pilot.pause()
-            assert app._filter_just_committed is True, \
-                "Flag should be stuck — no ListView.Selected to consume it"
+            assert app._filter_just_committed is False
 
             # Clear filter — files come back
             await pilot.press("slash")
@@ -112,11 +109,10 @@ async def test_filter_just_committed_flag_gets_stuck():
             await pilot.pause()
             assert len(app.query(FileItem)) == 2
 
-            # Enter should toggle, but the stale flag swallows it
+            # Enter should toggle immediately
             await pilot.press("enter")
             await pilot.pause()
-            assert len(app._selected) == 1, \
-                "Enter should toggle the item, but stale _filter_just_committed blocks it"
+            assert len(app._selected) == 1
     finally:
         for p in patches:
             p.stop()

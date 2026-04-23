@@ -569,8 +569,7 @@ def render_status() -> None:
     console.print(
         "  [dim]use [/dim][bold]p4 edit <file>[/bold][dim] to open for edit, "
         "[/dim][bold]p4 add <file>[/bold][dim] to mark new files, "
-        "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete  "
-        "([/dim][bold]p5 status -r[/bold][dim] to scan for untracked changes)[/dim]"
+        "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete[/dim]"
     )
 
 
