@@ -2,7 +2,7 @@
 
 These tests exercise:
 - File list rendering with mocked p4 data
-- Selection (space, a, d)
+- Selection (space, a)
 - Filter mode (/, typing, Escape, Enter) and focus correctness
 - Key passthrough prevention while filtering
 - Cursor navigation (j/k) skipping section headers
@@ -125,8 +125,29 @@ async def test_toggle_selection():
 
 
 @pytest.mark.asyncio
-async def test_select_all_deselect_all():
-    """'a' selects all files, 'd' deselects all."""
+async def test_select_all():
+    """'a' selects all files."""
+    from p5.tui.change_app import ChangeApp
+
+    patches = _make_patches()
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("a")
+            await pilot.pause()
+            assert len(app._selected) == 3
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_d_key_no_longer_deselects_all():
+    """'d' is not bound in ChangeApp anymore."""
     from p5.tui.change_app import ChangeApp
 
     patches = _make_patches()
@@ -143,7 +164,7 @@ async def test_select_all_deselect_all():
 
             await pilot.press("d")
             await pilot.pause()
-            assert len(app._selected) == 0
+            assert len(app._selected) == 3
     finally:
         for p in patches:
             p.stop()
@@ -484,6 +505,59 @@ async def test_space_opens_diff_and_escape_returns_to_list():
             assert app._detail_open is False
             assert app.query_one("#file-list", ListView).display is True
             assert app.query_one("#detail-view", FileDiffView).display is False
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_r_reverts_highlighted_file():
+    """'r' should revert the highlighted file after confirmation."""
+    from p5.tui.change_app import ChangeApp, FileItem
+
+    opened = list(FAKE_OPENED_DEFAULT)
+
+    def fake_run_p4(args, *, cwd=None, check=True):
+        joined = " ".join(args)
+        if "info" in joined:
+            return FAKE_P4_INFO_RAW
+        if "client -o" in joined:
+            return FAKE_P4_CLIENT_RAW
+        if args[:1] == ["revert"]:
+            depot_files = set(args[1:])
+            opened[:] = [rec for rec in opened if rec["depotFile"] not in depot_files]
+        return ""
+
+    def fake_tagged(args, *, cwd=None):
+        if "opened" in " ".join(args):
+            return list(opened)
+        return []
+
+    patches = [
+        patch("p5.p4.run_p4", fake_run_p4),
+        patch("p5.tui.change_app.run_p4", fake_run_p4),
+        patch("p5.tui.change_app.run_p4_tagged", fake_tagged),
+        patch("p5.workspace.run_p4", fake_run_p4),
+    ]
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            assert len(app.query(FileItem)) == 3
+
+            await pilot.press("r")
+            await pilot.pause()
+            for ch in "revert":
+                await pilot.press(ch)
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.pause()
+
+            assert len(app._files) == 2
+            assert len(app.query(FileItem)) == 2
+            assert all("alpha.cpp" not in f.depot_file for f in app._files)
     finally:
         for p in patches:
             p.stop()
