@@ -20,6 +20,7 @@ from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
 from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
+from p5.tui.widgets import FastRichLog
 from p5.workspace import any_to_rel, check_cwd_in_workspace, get_workspace
 
 _debug = os.environ.get("P5_DEBUG", "").strip() not in ("", "0")
@@ -215,10 +216,10 @@ class DiffApp(App):
             ]
         )
         with Horizontal(id="main"):
-            yield RichLog(id="file-list", highlight=False, markup=False, wrap=False, auto_scroll=False)
+            yield FastRichLog(id="file-list", highlight=False, markup=False, wrap=False, auto_scroll=False)
             with Vertical(id="diff-panel"):
                 yield Static("", id="file-header")
-                yield RichLog(id="diff-log", highlight=False, markup=False, wrap=False)
+                yield FastRichLog(id="diff-log", highlight=False, markup=False, wrap=False)
         yield Footer()
 
     def on_mount(self) -> None:

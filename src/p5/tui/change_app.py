@@ -10,7 +10,7 @@ from typing import ClassVar, Optional
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import ScrollableContainer, Vertical
+from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Input, ListItem, ListView, Static
@@ -18,6 +18,7 @@ from textual.widgets import Input, ListItem, ListView, Static
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.changes_app import _colorize_diff
+from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel, get_workspace
 
 
@@ -76,7 +77,7 @@ class CLItem(ListItem):
         super().__init__(Static(label, markup=True))
 
 
-class FileDiffView(ScrollableContainer):
+class FileDiffView(FastScrollableContainer):
     DEFAULT_CSS = """
     FileDiffView {
         border: solid $panel-lighten-1;
@@ -215,7 +216,7 @@ class CLSelectorScreen(ModalScreen[Optional[str]]):
                 f"[bold]Move {len(self._files)} file(s) to changelist[/bold]",
                 markup=True,
             )
-            yield ListView(id="cl-list")
+            yield FastListView(id="cl-list")
             yield Static("[dim]Enter: confirm \u00b7 Esc: cancel[/dim]", markup=True)
 
     def on_mount(self) -> None:
@@ -478,7 +479,7 @@ class ChangeApp(App):
             id="header-bar",
             markup=True,
         )
-        yield ListView(id="file-list")
+        yield FastListView(id="file-list")
         yield FileDiffView(id="detail-view")
         yield Input(placeholder="Filter files…", id="filter-input")
         yield Static("", id="filter-bar", markup=True)
