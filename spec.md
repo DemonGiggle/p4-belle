@@ -339,21 +339,21 @@ p5 change — manage default changelist
       M  src/net/socket.cpp
    ▶  A  src/ui/main.cpp
       M  src/ui/helper.h
- [space: toggle] [a: all] [d: none] [n: new CL] [m: move] [/: filter] [q: quit]
+ [Enter: toggle] [space: diff] [a: all] [n: new CL] [m: move] [r: revert] [/: filter] [q: quit]
 ```
 
 **Keybindings**:
 
 | Key | Action |
 |---|---|
-| `space` | Toggle selection of file under cursor |
+| `space` | Show the diff for the highlighted file |
 | `a` | Select all files (filtered) |
-| `d` | Deselect all files (filtered) |
 | `n` | Create new CL — opens modal with description input and file preview. Files are moved via `p4 change -i` + `p4 reopen -c <new_cl>` |
 | `m` | Move to existing CL — opens modal listing pending CLs + default. Uses `p4 reopen -c <target>` |
+| `r` | Revert the highlighted file after typing `revert` to confirm |
 | `/` | Filter files by path substring |
 | `j/k` or `↑/↓` | Move cursor (skips section headers) |
-| `Enter` | Toggle selection (same as space) |
+| `Enter` | Toggle selection |
 | `q` | Quit |
 
 **Modals**:

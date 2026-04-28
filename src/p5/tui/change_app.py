@@ -358,6 +358,59 @@ class NewCLScreen(ModalScreen[Optional[str]]):
         self.dismiss(None)
 
 
+# ── Revert Confirm Modal ─────────────────────────────────────────────────────
+
+class RevertConfirmScreen(ModalScreen[bool]):
+    """Double-confirm revert. User must type 'revert' to confirm."""
+
+    CSS = """
+    RevertConfirmScreen { align: center middle; }
+    #revert-box {
+        width: 60; height: auto;
+        background: $surface; border: thick $error; padding: 1 2;
+    }
+    #confirm-input { margin: 1 0; }
+    """
+
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(self, files: list[FileRecord]) -> None:
+        super().__init__()
+        self._files = files
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="revert-box"):
+            yield Static(
+                f"[bold red]Revert {len(self._files)} file(s)?[/bold red]",
+                markup=True,
+            )
+            for f in self._files[:10]:
+                letter = T.STATE_LETTER.get(f.action, "?")
+                color = T.ACTION_COLOR.get(f.action, "white")
+                yield Static(f"  [{color}]{letter}[/{color}]  {_esc(f.rel_path)}", markup=True)
+            if len(self._files) > 10:
+                yield Static(f"  [dim]... and {len(self._files) - 10} more[/dim]", markup=True)
+            yield Static("")
+            yield Static("[bold]Type 'revert' to confirm:[/bold]", markup=True)
+            yield Input(placeholder="revert", id="confirm-input")
+            yield Static("[dim]Esc: cancel[/dim]", markup=True)
+
+    def on_mount(self) -> None:
+        self.query_one("#confirm-input", Input).focus()
+
+    @on(Input.Submitted)
+    def on_submitted(self, event: Input.Submitted) -> None:
+        if event.value.strip().lower() == "revert":
+            self.dismiss(True)
+        else:
+            self.notify("Type 'revert' to confirm", severity="warning")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 # ── Main App ─────────────────────────────────────────────────────────────────
 
 class ChangeApp(App):
@@ -390,9 +443,9 @@ class ChangeApp(App):
         Binding("k,up",   "cursor_up",    "Up",         show=False),
         Binding("space",  "view_diff",    "Diff"),
         Binding("a",      "select_all",   "Select All"),
-        Binding("d",      "deselect_all", "Deselect"),
         Binding("n",      "new_cl",       "New CL"),
         Binding("m",      "move_to_cl",   "Move"),
+        Binding("r",      "revert_file",  "Revert"),
         Binding("slash",  "start_filter", "Filter"),
         Binding("q",      "quit",         "Quit"),
     ]
@@ -431,8 +484,8 @@ class ChangeApp(App):
         yield Static("", id="filter-bar", markup=True)
         yield Static(
             "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  [dim]a[/dim] all  "
-            "[dim]d[/dim] none  [dim]n[/dim] new CL  "
-            "[dim]m[/dim] move  [dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit",
+            "[dim]n[/dim] new CL  [dim]m[/dim] move  [dim]r[/dim] revert  "
+            "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit",
             id="footer-bar",
             markup=True,
         )
@@ -572,13 +625,6 @@ class ChangeApp(App):
             self._selected.add(f.depot_file)
         self._rebuild_list()
 
-    def action_deselect_all(self) -> None:
-        if self._filtering or self._detail_open:
-            return
-        for f in self._filtered:
-            self._selected.discard(f.depot_file)
-        self._rebuild_list()
-
     # ── changelist actions ────────────────────────────────────────────────
 
     def action_new_cl(self) -> None:
@@ -633,6 +679,46 @@ class ChangeApp(App):
             self.notify(f"Moved to CL {result}", severity="information")
             self._selected.clear()
             self._load_files()
+
+    def action_revert_file(self) -> None:
+        if self._filtering or self._detail_open:
+            return
+        rec = self._current_file()
+        if rec is None:
+            return
+        self.push_screen(RevertConfirmScreen([rec]), self._on_revert_done)
+
+    def _on_revert_done(self, confirmed: bool) -> None:
+        if not confirmed:
+            return
+        rec = self._current_file()
+        if rec is not None:
+            self._do_revert([rec])
+
+    @work(thread=True)
+    def _do_revert(self, files: list[FileRecord]) -> None:
+        if self._demo_mode:
+            self._demo_revert(files)
+            return
+        try:
+            depot_files = [f.depot_file for f in files]
+            run_p4(["revert"] + depot_files)
+            self.call_from_thread(
+                self.notify, f"Reverted {len(files)} file(s)", severity="information"
+            )
+            self.call_from_thread(self._load_files)
+        except P4Error as e:
+            self.call_from_thread(self.notify, str(e), severity="error")
+
+    def _demo_revert(self, files: list[FileRecord]) -> None:
+        reverted = {f.depot_file for f in files}
+        self._files = [f for f in self._files if f.depot_file not in reverted]
+        self._selected.difference_update(reverted)
+        self._run_filter()
+        self.call_from_thread(self._rebuild_list)
+        self.call_from_thread(
+            self.notify, f"Reverted {len(files)} file(s)", severity="information"
+        )
 
     # ── cursor movement (skip section headers) ────────────────────────────
 
