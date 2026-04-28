@@ -1,6 +1,7 @@
 """Shared Textual widgets for responsive p5 TUIs."""
 from __future__ import annotations
 
+from textual.actions import SkipAction
 from textual.containers import ScrollableContainer
 from textual.widgets import ListItem, ListView, RichLog
 
@@ -57,6 +58,34 @@ class _ImmediatePageScrollMixin:
 
 class FastListView(_ImmediatePageScrollMixin, ListView):
     """ListView that keeps the highlighted row in view without deferred scrolling."""
+
+    def action_page_down(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_page_down()
+        self._highlight_first_visible()
+
+    def action_page_up(self) -> None:
+        if not self.allow_vertical_scroll:
+            raise SkipAction()
+        self.scroll_page_up()
+        self._highlight_first_visible()
+
+    def _highlight_first_visible(self) -> None:
+        viewport_height = self.scrollable_content_region.height
+        if not viewport_height:
+            self.call_after_refresh(self._highlight_first_visible)
+            return
+
+        top = self.scroll_y
+        bottom = top + viewport_height
+        for index, item in enumerate(self._nodes):
+            if item.disabled:
+                continue
+            region = item.virtual_region
+            if region.height and region.bottom > top and region.y < bottom:
+                self.index = index
+                return
 
     def watch_index(self, old_index: int | None, new_index: int | None) -> None:
         if self._is_valid_index(old_index):

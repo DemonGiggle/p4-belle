@@ -17,6 +17,17 @@ class _FastListHarness(App[None]):
         )
 
 
+class _FastPagedListHarness(App[None]):
+    def compose(self) -> ComposeResult:
+        header = ListItem(Static("header"))
+        header.disabled = True
+        yield FastListView(
+            header,
+            *[ListItem(Static(f"item {i}")) for i in range(20)],
+            id="list-view",
+        )
+
+
 class _FastScrollableHarness(App[None]):
     def compose(self) -> ComposeResult:
         yield FastScrollableContainer(
@@ -92,6 +103,37 @@ async def test_fast_widgets_page_scroll_immediately(monkeypatch):
             assert calls[0]["immediate"] is True
             assert calls[1]["animate"] is False
             assert calls[1]["immediate"] is True
+
+
+@pytest.mark.asyncio
+async def test_fast_list_view_page_down_moves_highlight_to_first_visible_entry():
+    """Page Down should move the highlight to the first visible non-disabled row."""
+    app = _FastPagedListHarness()
+
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        lv = app.query_one(FastListView)
+
+        lv.action_page_down()
+        await pilot.pause()
+
+        assert lv.index == 10
+
+
+@pytest.mark.asyncio
+async def test_fast_list_view_page_up_moves_highlight_to_first_visible_entry():
+    """Page Up should move the highlight back to the first visible non-disabled row."""
+    app = _FastPagedListHarness()
+
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        lv = app.query_one(FastListView)
+
+        lv.action_page_down()
+        lv.action_page_up()
+        await pilot.pause()
+
+        assert lv.index == 1
 
 
 @pytest.mark.asyncio
