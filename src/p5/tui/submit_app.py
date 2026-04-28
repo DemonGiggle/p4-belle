@@ -14,18 +14,30 @@ from textual.widgets import Input, ListItem, ListView, Static, TextArea
 
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
+from p5.tui.change_app import FileDiffView, _build_local_path, _fetch_file_diff
 from p5.workspace import any_to_rel
 
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 
 class FileRecord:
-    __slots__ = ("depot_file", "rel_path", "action")
+    __slots__ = ("depot_file", "rel_path", "action", "local_path", "file_type", "diff", "diff_loaded")
 
-    def __init__(self, depot_file: str, action: str, rel_path: str | None = None) -> None:
+    def __init__(
+        self,
+        depot_file: str,
+        action: str,
+        rel_path: str | None = None,
+        local_path: str = "",
+        file_type: str = "text",
+    ) -> None:
         self.depot_file = depot_file
         self.rel_path = rel_path or any_to_rel(depot_file)
         self.action = action
+        self.local_path = local_path
+        self.file_type = file_type
+        self.diff = ""
+        self.diff_loaded = False
 
 
 class PendingCL:
@@ -53,7 +65,16 @@ def _load_cl_files(cl: str) -> list[FileRecord]:
         depot_file = record.get("depotFile", "")
         action = record.get("action", "edit")
         if depot_file:
-            files.append(FileRecord(depot_file, action))
+            rel_path = any_to_rel(depot_file)
+            files.append(
+                FileRecord(
+                    depot_file,
+                    action,
+                    rel_path=rel_path,
+                    local_path=_build_local_path(record.get("clientFile", ""), rel_path, action),
+                    file_type=record.get("type", "text"),
+                )
+            )
     return files
 
 
@@ -422,6 +443,7 @@ class SubmitApp(App):
                    dock: bottom; height: 1; }
     #filter-bar.visible { display: block; }
     #main-list { height: 1fr; }
+    #detail-view { height: 1fr; display: none; }
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
@@ -429,6 +451,7 @@ class SubmitApp(App):
         Binding("k,up",   "cursor_up",   "Up",          show=False),
         Binding("enter",  "select_item", "Select",      show=False),
         Binding("escape", "go_back",     "Back"),
+        Binding("space",  "view_diff",   "Diff",        show=False),
         Binding("m",      "move_file",   "Move"),
         Binding("r",      "revert_file", "Revert"),
         Binding("u",      "revert_unchanged", "Revert unchanged"),
@@ -450,6 +473,7 @@ class SubmitApp(App):
         self._filter_buf: str = ""
         self._filter_text: str = ""
         self._filter_just_committed: bool = False
+        self._detail_open: bool = False
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -458,6 +482,7 @@ class SubmitApp(App):
             markup=True,
         )
         yield ListView(id="main-list")
+        yield FileDiffView(id="detail-view")
         yield Static("", id="filter-bar", markup=True)
         yield Static("", id="footer-bar", markup=True)
 
@@ -470,11 +495,14 @@ class SubmitApp(App):
     def _update_footer(self) -> None:
         fb = self.query_one("#footer-bar", Static)
         if self._current_cl:
-            fb.update(
-                "[dim]m[/dim] move  [dim]r[/dim] revert  "
-                "[dim]u[/dim] revert unchanged  [dim]e[/dim] edit desc  "
-                "[dim]s[/dim] submit  [dim]Esc[/dim] back  [dim]q[/dim] quit"
-            )
+            if self._detail_open:
+                fb.update("[dim]j/k[/dim] scroll diff  [dim]Esc[/dim] back  [dim]q[/dim] quit")
+            else:
+                fb.update(
+                    "[dim]space[/dim] diff  [dim]m[/dim] move  [dim]r[/dim] revert  "
+                    "[dim]u[/dim] revert unchanged  [dim]e[/dim] edit desc  "
+                    "[dim]s[/dim] submit  [dim]Esc[/dim] back  [dim]q[/dim] quit"
+                )
         else:
             fb.update(
                 "[dim]Enter[/dim] select CL  "
@@ -498,8 +526,11 @@ class SubmitApp(App):
 
     def _show_cl_list(self) -> None:
         self._current_cl = None
+        self._detail_open = False
         self._update_footer()
+        self.query_one("#detail-view", FileDiffView).display = False
         lv = self.query_one("#main-list", ListView)
+        lv.display = True
         lv.clear()
         self._list_data = []
 
@@ -520,8 +551,11 @@ class SubmitApp(App):
 
     def _show_cl_detail(self, pcl: PendingCL) -> None:
         self._current_cl = pcl
+        self._detail_open = False
         self._update_footer()
+        self.query_one("#detail-view", FileDiffView).display = False
         lv = self.query_one("#main-list", ListView)
+        lv.display = True
         lv.clear()
         self._list_data = []
 
@@ -576,6 +610,9 @@ class SubmitApp(App):
     def action_cursor_down(self) -> None:
         if self._filtering:
             return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=3, animate=False, immediate=True)
+            return
         lv = self.query_one("#main-list", ListView)
         lv.action_cursor_down()
         idx = lv.index
@@ -585,6 +622,9 @@ class SubmitApp(App):
 
     def action_cursor_up(self) -> None:
         if self._filtering:
+            return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=-3, animate=False, immediate=True)
             return
         lv = self.query_one("#main-list", ListView)
         lv.action_cursor_up()
@@ -614,6 +654,8 @@ class SubmitApp(App):
     def action_go_back(self) -> None:
         if self._filtering:
             self._cancel_filter()
+        elif self._detail_open:
+            self._close_detail()
         elif self._current_cl:
             self._filter_text = ""
             self._show_cl_list()
@@ -621,7 +663,7 @@ class SubmitApp(App):
     # ── move file to another CL ──────────────────────────────────────────
 
     def action_move_file(self) -> None:
-        if self._filtering or not self._current_cl:
+        if self._filtering or self._detail_open or not self._current_cl:
             return
         item = self._current_item()
         if not isinstance(item, FileRecord):
@@ -643,7 +685,7 @@ class SubmitApp(App):
     # ── revert file (double confirm) ─────────────────────────────────────
 
     def action_revert_file(self) -> None:
-        if self._filtering or not self._current_cl:
+        if self._filtering or self._detail_open or not self._current_cl:
             return
         item = self._current_item()
         if not isinstance(item, FileRecord):
@@ -681,7 +723,7 @@ class SubmitApp(App):
     # ── revert unchanged ─────────────────────────────────────────────────
 
     def action_revert_unchanged(self) -> None:
-        if self._filtering or not self._current_cl:
+        if self._filtering or self._detail_open or not self._current_cl:
             return
         if not self._current_cl.files:
             self.notify("No files in this changelist", severity="warning")
@@ -720,7 +762,7 @@ class SubmitApp(App):
     # ── edit description ──────────────────────────────────────────────────
 
     def action_edit_desc(self) -> None:
-        if self._filtering or not self._current_cl:
+        if self._filtering or self._detail_open or not self._current_cl:
             return
         self.push_screen(
             DescriptionScreen(self._current_cl.description),
@@ -770,7 +812,7 @@ class SubmitApp(App):
     # ── submit ────────────────────────────────────────────────────────────
 
     def action_do_submit(self) -> None:
-        if self._filtering or not self._current_cl:
+        if self._filtering or self._detail_open or not self._current_cl:
             return
         if not self._current_cl.files:
             self.notify("No files to submit", severity="warning")
@@ -830,7 +872,7 @@ class SubmitApp(App):
     # ── filter mode ───────────────────────────────────────────────────────
 
     def action_start_filter(self) -> None:
-        if self._current_cl:
+        if self._current_cl or self._detail_open:
             return  # filter only in CL list view
         self._filtering = True
         self._filter_just_committed = False
@@ -878,6 +920,44 @@ class SubmitApp(App):
             event.stop()
         else:
             return  # let unhandled keys pass through
+
+    def action_view_diff(self) -> None:
+        if self._filtering or self._detail_open or not self._current_cl:
+            return
+        item = self._current_item()
+        if isinstance(item, FileRecord):
+            self._open_detail(item)
+
+    def _open_detail(self, rec: FileRecord) -> None:
+        lv = self.query_one("#main-list", ListView)
+        dv = self.query_one("#detail-view", FileDiffView)
+        lv.display = False
+        dv.display = True
+        self._detail_open = True
+        self._update_footer()
+
+        if rec.diff_loaded:
+            dv.update_content(rec)
+            return
+
+        dv.show_loading()
+        self._load_detail(rec)
+
+    def _close_detail(self) -> None:
+        self.query_one("#detail-view", FileDiffView).display = False
+        self.query_one("#main-list", ListView).display = True
+        self._detail_open = False
+        self._update_footer()
+
+    @work(thread=True)
+    def _load_detail(self, rec: FileRecord) -> None:
+        if self._demo_mode:
+            rec.diff = "(diff unavailable)"
+        else:
+            rec.diff = _fetch_file_diff(rec)
+        rec.diff_loaded = True
+        dv = self.query_one("#detail-view", FileDiffView)
+        self.call_from_thread(dv.update_content, rec)
 
     def _move_demo_file(self, item: FileRecord) -> None:
         if not self._current_cl:
