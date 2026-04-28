@@ -388,8 +388,7 @@ class ChangeApp(App):
         Binding("escape", "collapse",     "Back",       show=False),
         Binding("j,down", "cursor_down",  "Down",       show=False),
         Binding("k,up",   "cursor_up",    "Up",         show=False),
-        Binding("v",      "view_diff",    "Diff"),
-        Binding("space",  "toggle",       "Toggle"),
+        Binding("space",  "view_diff",    "Diff"),
         Binding("a",      "select_all",   "Select All"),
         Binding("d",      "deselect_all", "Deselect"),
         Binding("n",      "new_cl",       "New CL"),
@@ -431,7 +430,7 @@ class ChangeApp(App):
         yield Input(placeholder="Filter files…", id="filter-input")
         yield Static("", id="filter-bar", markup=True)
         yield Static(
-            "[dim]Enter[/dim] toggle  [dim]v[/dim] diff  [dim]space[/dim] toggle  [dim]a[/dim] all  "
+            "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  [dim]a[/dim] all  "
             "[dim]d[/dim] none  [dim]n[/dim] new CL  "
             "[dim]m[/dim] move  [dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit",
             id="footer-bar",

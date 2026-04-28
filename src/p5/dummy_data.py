@@ -673,7 +673,7 @@ def render_change(cl_number: str | None, do_delete: bool) -> None:
     console.print(_file_line("edit", "src/net/socket.cpp"))
     console.print(_file_line("delete", "src/legacy/old_auth.cpp"))
     console.print()
-    console.print(Text("[space: toggle] [n: new CL] [m: move] [/: filter] [q: quit]", style="dim"))
+    console.print(Text("[Enter: toggle] [space: diff] [n: new CL] [m: move] [/: filter] [q: quit]", style="dim"))
 
 
 def render_submit(cl: str | None, description: str | None) -> None:

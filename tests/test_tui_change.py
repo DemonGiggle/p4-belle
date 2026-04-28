@@ -103,8 +103,8 @@ async def test_app_loads_files():
 
 @pytest.mark.asyncio
 async def test_toggle_selection():
-    """Pressing space should toggle file selection."""
-    from p5.tui.change_app import ChangeApp, FileItem
+    """Pressing Enter should toggle file selection."""
+    from p5.tui.change_app import ChangeApp
 
     patches = _make_patches()
     for p in patches:
@@ -115,8 +115,8 @@ async def test_toggle_selection():
             await pilot.pause()
             assert len(app._selected) == 0
 
-            # Press space to select the current file
-            await pilot.press("space")
+            # Press Enter to select the current file
+            await pilot.press("enter")
             await pilot.pause()
             assert len(app._selected) == 1
     finally:
@@ -374,10 +374,11 @@ async def test_keys_blocked_during_filter():
             await pilot.pause()
             assert len(app._selected) == 0, "select_all should NOT fire during filter"
 
-            # Press space — should type into filter, NOT toggle
+            # Press space — should type into filter, NOT open diff
             await pilot.press("space")
             await pilot.pause()
-            assert len(app._selected) == 0, "toggle should NOT fire during filter"
+            assert len(app._selected) == 0, "diff action should NOT fire during filter"
+            assert app._detail_open is False, "diff action should NOT fire during filter"
     finally:
         for p in patches:
             p.stop()
@@ -451,8 +452,8 @@ async def test_filter_submit_restores_highlight_to_first_result():
 
 
 @pytest.mark.asyncio
-async def test_v_opens_diff_and_escape_returns_to_list():
-    """v opens the highlighted file diff; Escape returns to the file list."""
+async def test_space_opens_diff_and_escape_returns_to_list():
+    """Space opens the highlighted file diff; Escape returns to the file list."""
     from p5.tui.change_app import ChangeApp, FileDiffView
     from textual.widgets import ListView
 
@@ -470,7 +471,7 @@ async def test_v_opens_diff_and_escape_returns_to_list():
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
 
-            await pilot.press("v")
+            await pilot.press("space")
             await pilot.pause()
 
             assert app._detail_open is True
@@ -513,7 +514,7 @@ async def test_detail_view_jk_scrolls_diff_panel():
             lv = app.query_one("#file-list", ListView)
             start_index = lv.index
 
-            await pilot.press("v")
+            await pilot.press("space")
             await pilot.pause()
 
             detail = app.query_one("#detail-view", FileDiffView)
