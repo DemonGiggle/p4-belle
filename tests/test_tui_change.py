@@ -444,15 +444,15 @@ async def test_filter_submit_restores_highlight_to_first_result():
 
             await pilot.press("enter")
             await pilot.pause()
-            assert app._detail_open is True
+            assert len(app._selected) == 1
     finally:
         for p in patches:
             p.stop()
 
 
 @pytest.mark.asyncio
-async def test_enter_opens_diff_and_escape_returns_to_list():
-    """Enter opens the highlighted file diff; Escape returns to the file list."""
+async def test_v_opens_diff_and_escape_returns_to_list():
+    """v opens the highlighted file diff; Escape returns to the file list."""
     from p5.tui.change_app import ChangeApp, FileDiffView
     from textual.widgets import ListView
 
@@ -470,7 +470,7 @@ async def test_enter_opens_diff_and_escape_returns_to_list():
         async with app.run_test(size=(120, 30)) as pilot:
             await pilot.pause()
 
-            await pilot.press("enter")
+            await pilot.press("v")
             await pilot.pause()
 
             assert app._detail_open is True
@@ -513,7 +513,7 @@ async def test_detail_view_jk_scrolls_diff_panel():
             lv = app.query_one("#file-list", ListView)
             start_index = lv.index
 
-            await pilot.press("enter")
+            await pilot.press("v")
             await pilot.pause()
 
             detail = app.query_one("#detail-view", FileDiffView)

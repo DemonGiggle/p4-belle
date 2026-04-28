@@ -388,6 +388,7 @@ class ChangeApp(App):
         Binding("escape", "collapse",     "Back",       show=False),
         Binding("j,down", "cursor_down",  "Down",       show=False),
         Binding("k,up",   "cursor_up",    "Up",         show=False),
+        Binding("v",      "view_diff",    "Diff"),
         Binding("space",  "toggle",       "Toggle"),
         Binding("a",      "select_all",   "Select All"),
         Binding("d",      "deselect_all", "Deselect"),
@@ -430,7 +431,7 @@ class ChangeApp(App):
         yield Input(placeholder="Filter files…", id="filter-input")
         yield Static("", id="filter-bar", markup=True)
         yield Static(
-            "[dim]Enter[/dim] diff  [dim]space[/dim] toggle  [dim]a[/dim] all  "
+            "[dim]Enter[/dim] toggle  [dim]v[/dim] diff  [dim]space[/dim] toggle  [dim]a[/dim] all  "
             "[dim]d[/dim] none  [dim]n[/dim] new CL  "
             "[dim]m[/dim] move  [dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit",
             id="footer-bar",
@@ -672,7 +673,14 @@ class ChangeApp(App):
         if self._filtering or self._detail_open:
             return
         if isinstance(event.item, FileItem):
-            self._open_detail(event.item.rec)
+            self.action_toggle()
+
+    def action_view_diff(self) -> None:
+        if self._filtering or self._detail_open:
+            return
+        rec = self._current_file()
+        if rec is not None:
+            self._open_detail(rec)
 
     def action_collapse(self) -> None:
         if self._filtering:

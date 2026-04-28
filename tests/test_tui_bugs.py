@@ -109,10 +109,10 @@ async def test_filter_submit_does_not_swallow_next_enter():
             await pilot.pause()
             assert len(app.query(FileItem)) == 2
 
-            # Enter should open diff immediately
+            # Enter should toggle immediately
             await pilot.press("enter")
             await pilot.pause()
-            assert app._detail_open is True
+            assert len(app._selected) == 1
     finally:
         for p in patches:
             p.stop()
