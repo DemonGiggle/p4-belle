@@ -349,6 +349,37 @@ def build_change_files() -> list:
     return files
 
 
+def build_change_diffs() -> dict[str, str]:
+    diffs: dict[str, str] = {}
+    for idx, record in enumerate(build_change_files()):
+        if record.action == "add":
+            body = [
+                "@@ -0,0 +1,4 @@",
+                f"+// demo file {idx + 1}",
+                "+int main() {",
+                "+    return 0;",
+                "+}",
+            ]
+        elif record.action == "delete":
+            body = [
+                "@@ -1,4 +0,0 @@",
+                f"-// deleted demo file {idx + 1}",
+                "-int main() {",
+                "-    return 0;",
+                "-}",
+            ]
+        else:
+            body = [
+                "@@ -1,3 +1,4 @@",
+                " int main() {",
+                f"+    log_demo_metric({idx + 1});",
+                "     return 0;",
+                " }",
+            ]
+        diffs[record.depot_file] = _demo_change_diff(record.rel_path, body)
+    return diffs
+
+
 def build_submit_cls() -> list:
     from p5.tui.submit_app import FileRecord, PendingCL
 
@@ -642,7 +673,7 @@ def render_change(cl_number: str | None, do_delete: bool) -> None:
     console.print(_file_line("edit", "src/net/socket.cpp"))
     console.print(_file_line("delete", "src/legacy/old_auth.cpp"))
     console.print()
-    console.print(Text("[space: toggle] [n: new CL] [m: move] [/: filter] [q: quit]", style="dim"))
+    console.print(Text("[Enter: toggle] [space: diff] [n: new CL] [m: move] [/: filter] [q: quit]", style="dim"))
 
 
 def render_submit(cl: str | None, description: str | None) -> None:

@@ -5,7 +5,7 @@ import click
 from rich.console import Console
 
 from p5.completion import complete_pending_cls
-from p5.dummy_data import build_change_files, render_change
+from p5.dummy_data import build_change_diffs, build_change_files, render_change
 from p5.p4 import P4Error, run_p4
 from p5.workspace import check_cwd_in_workspace
 
@@ -29,7 +29,11 @@ def change_cmd(cl_number: str | None, do_delete: bool, dummy_data: bool) -> None
     if dummy_data:
         if cl_number is None and not do_delete:
             from p5.tui.change_app import ChangeApp
-            ChangeApp(files=build_change_files(), demo_mode=True).run()
+            ChangeApp(
+                files=build_change_files(),
+                demo_mode=True,
+                demo_diffs=build_change_diffs(),
+            ).run()
             return
         render_change(cl_number, do_delete)
         return

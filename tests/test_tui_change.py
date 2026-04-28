@@ -103,8 +103,8 @@ async def test_app_loads_files():
 
 @pytest.mark.asyncio
 async def test_toggle_selection():
-    """Pressing space should toggle file selection."""
-    from p5.tui.change_app import ChangeApp, FileItem
+    """Pressing Enter should toggle file selection."""
+    from p5.tui.change_app import ChangeApp
 
     patches = _make_patches()
     for p in patches:
@@ -115,8 +115,8 @@ async def test_toggle_selection():
             await pilot.pause()
             assert len(app._selected) == 0
 
-            # Press space to select the current file
-            await pilot.press("space")
+            # Press Enter to select the current file
+            await pilot.press("enter")
             await pilot.pause()
             assert len(app._selected) == 1
     finally:
@@ -374,10 +374,11 @@ async def test_keys_blocked_during_filter():
             await pilot.pause()
             assert len(app._selected) == 0, "select_all should NOT fire during filter"
 
-            # Press space — should type into filter, NOT toggle
+            # Press space — should type into filter, NOT open diff
             await pilot.press("space")
             await pilot.pause()
-            assert len(app._selected) == 0, "toggle should NOT fire during filter"
+            assert len(app._selected) == 0, "diff action should NOT fire during filter"
+            assert app._detail_open is False, "diff action should NOT fire during filter"
     finally:
         for p in patches:
             p.stop()
@@ -445,6 +446,90 @@ async def test_filter_submit_restores_highlight_to_first_result():
             await pilot.press("enter")
             await pilot.pause()
             assert len(app._selected) == 1
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_space_opens_diff_and_escape_returns_to_list():
+    """Space opens the highlighted file diff; Escape returns to the file list."""
+    from p5.tui.change_app import ChangeApp, FileDiffView
+    from textual.widgets import ListView
+
+    patches = _make_patches()
+    patches.append(
+        patch(
+            "p5.tui.change_app._fetch_file_diff",
+            return_value="diff src/alpha.cpp\n--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1,2 @@\n line\n+extra\n",
+        )
+    )
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("space")
+            await pilot.pause()
+
+            assert app._detail_open is True
+            assert app.query_one("#file-list", ListView).display is False
+            assert app.query_one("#detail-view", FileDiffView).display is True
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            assert app._detail_open is False
+            assert app.query_one("#file-list", ListView).display is True
+            assert app.query_one("#detail-view", FileDiffView).display is False
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_detail_view_jk_scrolls_diff_panel():
+    """When diff is open, j/k should scroll the diff panel instead of moving the list."""
+    from p5.tui.change_app import ChangeApp, FileDiffView
+    from textual.widgets import ListView
+
+    patches = _make_patches()
+    patches.append(
+        patch(
+            "p5.tui.change_app._fetch_file_diff",
+            return_value="\n".join(
+                ["diff src/alpha.cpp", "--- a/src/alpha.cpp", "+++ b/src/alpha.cpp", "@@ -1 +1,40 @@"]
+                + [f"+line {i}" for i in range(40)]
+            ),
+        )
+    )
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            lv = app.query_one("#file-list", ListView)
+            start_index = lv.index
+
+            await pilot.press("space")
+            await pilot.pause()
+
+            detail = app.query_one("#detail-view", FileDiffView)
+            start_y = detail.scroll_y
+
+            await pilot.press("j")
+            await pilot.pause()
+            assert detail.scroll_y > start_y
+            assert lv.index == start_index
+
+            moved_y = detail.scroll_y
+            await pilot.press("k")
+            await pilot.pause()
+            assert detail.scroll_y < moved_y
+            assert lv.index == start_index
     finally:
         for p in patches:
             p.stop()

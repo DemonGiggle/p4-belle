@@ -205,10 +205,10 @@ p5 change
       M  src/net/socket.cpp
    ▶  A  src/ui/main.cpp
       M  src/ui/helper.h
- [space: toggle] [a: all] [d: none] [n: new CL] [m: move] [/: filter] [q: quit]
+[Enter: toggle] [space: diff] [a: all] [d: none] [n: new CL] [m: move] [/: filter] [q: quit]
 ```
 
-Select files with `space`, filter with `/`, then:
+Select files with `Enter`, show the highlighted file diff with `space`, filter with `/`, then:
 - `n` — create a new changelist with selected files (enter a description)
 - `m` — move selected files to an existing pending changelist (popup picker)
 - `a` / `d` — select all / deselect all (respects current filter)
