@@ -8,18 +8,6 @@ class FastListView(ListView):
     """ListView that keeps the highlighted row in view without deferred scrolling."""
 
     def watch_index(self, old_index: int | None, new_index: int | None) -> None:
-        if new_index is not None:
-            selected_widget = self._nodes[new_index]
-            if selected_widget.region:
-                self.scroll_to_widget(selected_widget, animate=False, immediate=True)
-            else:
-                self.call_after_refresh(
-                    self.scroll_to_widget,
-                    selected_widget,
-                    animate=False,
-                    immediate=True,
-                )
-
         if self._is_valid_index(old_index):
             old_child = self._nodes[old_index]
             assert isinstance(old_child, ListItem)
@@ -34,5 +22,15 @@ class FastListView(ListView):
             assert isinstance(new_child, ListItem)
             new_child.highlighted = True
             self.post_message(self.Highlighted(self, new_child))
+
+            if new_child.region:
+                self.scroll_to_widget(new_child, animate=False, immediate=True)
+            else:
+                self.call_after_refresh(
+                    self.scroll_to_widget,
+                    new_child,
+                    animate=False,
+                    immediate=True,
+                )
         else:
             self.post_message(self.Highlighted(self, None))

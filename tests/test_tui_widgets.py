@@ -40,6 +40,19 @@ async def test_fast_list_view_scrolls_immediately_on_index_change(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_fast_list_view_ignores_invalid_index():
+    """Invalid indices should be ignored without touching the backing node list."""
+    app = _FastListHarness()
+
+    async with app.run_test(size=(40, 10)) as pilot:
+        await pilot.pause()
+        lv = app.query_one(FastListView)
+        original_index = lv.index
+        lv.watch_index(None, 99)
+        assert lv.index == original_index
+
+
+@pytest.mark.asyncio
 async def test_all_p5_tuis_use_fast_list_view():
     """Every interactive p5 list should use the shared responsive list widget."""
     from p5.tui.change_app import ChangeApp, FileRecord as ChangeFileRecord
