@@ -9,14 +9,13 @@ from typing import ClassVar
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import ScrollableContainer
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
-from p5.tui.widgets import FastListView
+from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel
 
 
@@ -121,7 +120,7 @@ class ChangeItem(ListItem):
         yield Static(f"{cl_col}  {date_col}  {user_col}  {desc_col}", markup=True)
 
 
-class DiffView(ScrollableContainer):
+class DiffView(FastScrollableContainer):
     DEFAULT_CSS = """
     DiffView {
         border: solid $panel-lighten-1;

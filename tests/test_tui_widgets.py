@@ -5,7 +5,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import ListItem, Static
 
-from p5.tui.widgets import FastListView
+from p5.tui.widgets import FastListView, FastRichLog, FastScrollableContainer
 
 
 class _FastListHarness(App[None]):
@@ -15,6 +15,19 @@ class _FastListHarness(App[None]):
             ListItem(Static("two")),
             id="list-view",
         )
+
+
+class _FastScrollableHarness(App[None]):
+    def compose(self) -> ComposeResult:
+        yield FastScrollableContainer(
+            *[Static(f"line {i}") for i in range(20)],
+            id="detail-view",
+        )
+
+
+class _FastRichLogHarness(App[None]):
+    def compose(self) -> ComposeResult:
+        yield FastRichLog(id="log")
 
 
 @pytest.mark.asyncio
@@ -53,8 +66,38 @@ async def test_fast_list_view_ignores_invalid_index():
 
 
 @pytest.mark.asyncio
-async def test_all_p5_tuis_use_fast_list_view():
-    """Every interactive p5 list should use the shared responsive list widget."""
+async def test_fast_widgets_page_scroll_immediately(monkeypatch):
+    """Shared fast widgets should page-scroll without animation by default."""
+    apps = (
+        (_FastListHarness(), FastListView, "#list-view"),
+        (_FastScrollableHarness(), FastScrollableContainer, "#detail-view"),
+        (_FastRichLogHarness(), FastRichLog, "#log"),
+    )
+
+    for app, widget_type, selector in apps:
+        async with app.run_test(size=(40, 10)) as pilot:
+            await pilot.pause()
+            widget = app.query_one(selector, widget_type)
+            calls: list[dict[str, object]] = []
+
+            def fake_scroll_to(*args, **kwargs):
+                calls.append(kwargs)
+
+            monkeypatch.setattr(widget, "scroll_to", fake_scroll_to)
+            widget.scroll_page_down()
+            widget.scroll_page_up()
+
+            assert len(calls) == 2
+            assert calls[0]["animate"] is False
+            assert calls[0]["immediate"] is True
+            assert calls[1]["animate"] is False
+            assert calls[1]["immediate"] is True
+
+
+@pytest.mark.asyncio
+async def test_all_p5_tuis_use_fast_widgets():
+    """Every interactive p5 view should use the shared responsive widgets."""
+    from p5.commands.diff import DiffApp, FileEntry, GROUP_MODIFIED
     from p5.tui.change_app import ChangeApp, FileRecord as ChangeFileRecord
     from p5.tui.changes_app import ChangeRecord, ChangesApp
     from p5.tui.submit_app import FileRecord as SubmitFileRecord
@@ -111,6 +154,22 @@ async def test_all_p5_tuis_use_fast_list_view():
             )
         ]
     )
+    diff_app = DiffApp(
+        groups={
+            GROUP_MODIFIED: [
+                FileEntry(
+                    depot_path="//depot/myproject/src/alpha.cpp",
+                    local_path="/tmp/src/alpha.cpp",
+                    action="edit",
+                    file_type="text",
+                    display_path="src/alpha.cpp",
+                )
+            ]
+        },
+        initial_cache={
+            "//depot/myproject/src/alpha.cpp": [("diff src/alpha.cpp", "dim")]
+        },
+    )
 
     async with workspace_app.run_test(size=(100, 24)) as pilot:
         await pilot.pause()
@@ -119,11 +178,19 @@ async def test_all_p5_tuis_use_fast_list_view():
     async with changes_app.run_test(size=(100, 24)) as pilot:
         await pilot.pause()
         assert isinstance(changes_app.query_one("#list-view"), FastListView)
+        assert isinstance(changes_app.query_one("#detail-view"), FastScrollableContainer)
 
     async with change_app.run_test(size=(100, 24)) as pilot:
         await pilot.pause()
         assert isinstance(change_app.query_one("#file-list"), FastListView)
+        assert isinstance(change_app.query_one("#detail-view"), FastScrollableContainer)
 
     async with submit_app.run_test(size=(100, 24)) as pilot:
         await pilot.pause()
         assert isinstance(submit_app.query_one("#main-list"), FastListView)
+        assert isinstance(submit_app.query_one("#detail-view"), FastScrollableContainer)
+
+    async with diff_app.run_test(size=(100, 24)) as pilot:
+        await pilot.pause()
+        assert isinstance(diff_app.query_one("#file-list"), FastRichLog)
+        assert isinstance(diff_app.query_one("#diff-log"), FastRichLog)

@@ -1,10 +1,61 @@
 """Shared Textual widgets for responsive p5 TUIs."""
 from __future__ import annotations
 
-from textual.widgets import ListItem, ListView
+from textual.containers import ScrollableContainer
+from textual.widgets import ListItem, ListView, RichLog
 
 
-class FastListView(ListView):
+class _ImmediatePageScrollMixin:
+    """Default page scrolling to an immediate jump instead of animation."""
+
+    def scroll_page_down(
+        self,
+        *,
+        animate: bool = False,
+        speed: float | None = None,
+        duration: float | None = None,
+        easing=None,
+        force: bool = False,
+        on_complete=None,
+        level: str = "basic",
+    ) -> None:
+        self.scroll_to(
+            y=self.scroll_y + self.scrollable_content_region.height,
+            animate=animate,
+            speed=speed,
+            duration=duration,
+            easing=easing,
+            force=force,
+            on_complete=on_complete,
+            level=level,
+            immediate=not animate,
+        )
+
+    def scroll_page_up(
+        self,
+        *,
+        animate: bool = False,
+        speed: float | None = None,
+        duration: float | None = None,
+        easing=None,
+        force: bool = False,
+        on_complete=None,
+        level: str = "basic",
+    ) -> None:
+        self.scroll_to(
+            y=self.scroll_y - self.scrollable_content_region.height,
+            animate=animate,
+            speed=speed,
+            duration=duration,
+            easing=easing,
+            force=force,
+            on_complete=on_complete,
+            level=level,
+            immediate=not animate,
+        )
+
+
+class FastListView(_ImmediatePageScrollMixin, ListView):
     """ListView that keeps the highlighted row in view without deferred scrolling."""
 
     def watch_index(self, old_index: int | None, new_index: int | None) -> None:
@@ -34,3 +85,11 @@ class FastListView(ListView):
                 )
         else:
             self.post_message(self.Highlighted(self, None))
+
+
+class FastScrollableContainer(_ImmediatePageScrollMixin, ScrollableContainer):
+    """Scrollable container with immediate page-up/page-down behavior."""
+
+
+class FastRichLog(_ImmediatePageScrollMixin, RichLog):
+    """RichLog with immediate page-up/page-down behavior."""
