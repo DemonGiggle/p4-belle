@@ -12,6 +12,7 @@ from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
+from p5.tui.widgets import FastListView
 
 
 # ─── Data ────────────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ class WorkspaceApp(App):
             id="header-bar",
             markup=True,
         )
-        yield ListView(id="list-view")
+        yield FastListView(id="list-view")
         yield Static("", id="filter-bar")
         yield Static("[dim]Loading workspaces...[/dim]", id="status-bar", markup=True)
         yield Footer()

@@ -15,6 +15,7 @@ from textual.widgets import Input, ListItem, ListView, Static, TextArea
 from p5 import theme as T
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.change_app import FileDiffView, _build_local_path, _fetch_file_diff
+from p5.tui.widgets import FastListView
 from p5.workspace import any_to_rel
 
 
@@ -221,7 +222,7 @@ class MoveFilesScreen(ModalScreen[Optional[str]]):
                 f"[bold]Move {len(self._files)} file(s) to changelist[/bold]",
                 markup=True,
             )
-            yield ListView(id="move-list")
+            yield FastListView(id="move-list")
             yield Static("[dim]Enter: confirm · Esc: cancel[/dim]", markup=True)
 
     def on_mount(self) -> None:
@@ -481,7 +482,7 @@ class SubmitApp(App):
             id="header-bar",
             markup=True,
         )
-        yield ListView(id="main-list")
+        yield FastListView(id="main-list")
         yield FileDiffView(id="detail-view")
         yield Static("", id="filter-bar", markup=True)
         yield Static("", id="footer-bar", markup=True)
