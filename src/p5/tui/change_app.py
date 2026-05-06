@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import ClassVar, Optional
 
+from rich.markup import escape as markup_escape
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -59,7 +60,7 @@ class FileRecord:
 
 
 def _esc(text: str) -> str:
-    return text.replace("[", "\\[").replace("]", "\\]")
+    return markup_escape(text)
 
 
 # ── List items ────────────────────────────────────────────────────────────────

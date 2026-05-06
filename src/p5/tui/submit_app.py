@@ -5,6 +5,7 @@ import re as _re
 import subprocess
 from typing import ClassVar, Optional
 
+from rich.markup import escape as markup_escape
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -52,7 +53,7 @@ class PendingCL:
 
 
 def _esc(text: str) -> str:
-    return text.replace("[", "\\[").replace("]", "\\]")
+    return markup_escape(text)
 
 
 def _load_cl_files(cl: str) -> list[FileRecord]:

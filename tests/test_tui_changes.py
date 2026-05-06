@@ -30,18 +30,19 @@ async def test_w_toggles_whitespace_mode_for_change_list_diff():
         ]
     )
 
-    async with app.run_test(size=(120, 30)) as pilot:
-        await pilot.pause()
+    with patch("p5.tui.changes_app.any_to_rel", return_value="src/alpha.cpp"):
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
 
-        await pilot.press("enter")
-        await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
 
-        assert app._ignore_whitespace is False
+            assert app._ignore_whitespace is False
 
-        await pilot.press("w")
-        await pilot.pause()
+            await pilot.press("w")
+            await pilot.pause()
 
-        assert app._ignore_whitespace is True
+            assert app._ignore_whitespace is True
 
 
 @pytest.mark.asyncio
@@ -135,3 +136,15 @@ def test_render_diff_lines_uses_provided_column_width():
     assert any(before_line in line for line in rendered)
     assert any(after_line in line for line in rendered)
     assert not any("…" in line for line in rendered)
+
+
+def test_render_diff_lines_does_not_show_spurious_bracket_escape():
+    """Square brackets in diff content should not render a visible backslash."""
+    from p5.tui.changes_app import _render_diff_lines
+
+    rendered = _render_diff_lines(
+        "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-old = []\n+new = []\n",
+    )
+
+    assert any("[]" in line for line in rendered)
+    assert not any("[\\]" in line for line in rendered)

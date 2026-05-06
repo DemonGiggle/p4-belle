@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import ClassVar
 
+from rich.markup import escape as markup_escape
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -312,7 +313,7 @@ def _colorize_diff(raw: str, *, ignore_whitespace: bool = False) -> list[str]:
 
 
 def _esc(s: str) -> str:
-    return s.replace("[", "\\[").replace("]", "\\]")
+    return markup_escape(s)
 
 
 def _render_diff_lines(
