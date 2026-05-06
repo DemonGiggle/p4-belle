@@ -458,6 +458,28 @@ class TestDiffCmd:
         assert result.exit_code == 0
         assert "no files" in result.output
 
+    def test_ignore_whitespace_hides_space_only_changes(self):
+        """-w should suppress diffs that only change spaces or tabs."""
+        with patch("p5.commands.diff.Path.read_text", return_value="value    =    1\n"):
+            result = self._invoke(
+                args=["-w"],
+                tagged_results={
+                    "opened": [
+                        {
+                            "depotFile": "//depot/myproject/src/main.cpp",
+                            "clientFile": f"//{FAKE_CLIENT}/src/main.cpp",
+                            "action": "edit",
+                            "type": "text",
+                        }
+                    ],
+                },
+                raw_results={
+                    "print -q //depot/myproject/src/main.cpp#have": "value = 1\n",
+                },
+            )
+        assert result.exit_code == 0
+        assert "no differences" in result.output
+
 
 # ── p5 sync ──────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,6 @@
 """p5 diff — interactive TUI diff viewer for opened files."""
 from __future__ import annotations
 
-import difflib
 import os
 import re
 import sys
@@ -18,6 +17,7 @@ from textual.widgets import Footer, RichLog, Static, Tab, Tabs
 
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
+from p5.diff_utils import join_rendered_diffs, make_unified_diff
 from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastRichLog
@@ -74,10 +74,10 @@ class FileEntry:
 # Diff fetching
 # ---------------------------------------------------------------------------
 
-def _style_unified_diff(lines: list[str]) -> list[tuple[str, str]]:
+def _style_unified_diff(raw: str) -> list[tuple[str, str]]:
     """Apply rich styles to unified diff lines (from difflib or any standard source)."""
     result: list[tuple[str, str]] = []
-    for line in lines:
+    for line in raw.splitlines():
         line = line.rstrip("\n")
         if line.startswith("@@"):
             m = _HUNK_RE.match(line)
@@ -94,15 +94,15 @@ def _style_unified_diff(lines: list[str]) -> list[tuple[str, str]]:
     return result or [("(no differences)", "dim")]
 
 
-def _fetch_diff(entry: FileEntry) -> list[tuple[str, str]]:
-    """Return (text, rich_style) pairs for the entry's diff.
+def _fetch_diff(entry: FileEntry, *, ignore_whitespace: bool = False) -> str:
+    """Return the entry's diff as unified text.
 
     For modified files, retrieves the depot base via 'p4 print' and computes
     the diff locally using difflib — avoiding 'p4 diff' which can hang when
     P4DIFF is set to an interactive tool.
     """
     if entry.is_binary:
-        return [("(binary file — diff not shown)", "dim")]
+        return "(binary file — diff not shown)"
 
     if entry.group == GROUP_MODIFIED:
         depot_spec = f"{entry.depot_path}#have"
@@ -112,31 +112,33 @@ def _fetch_diff(entry: FileEntry) -> list[tuple[str, str]]:
             _dbg(f"p4 print returned {len(depot_raw)} bytes")
         except P4Error as e:
             _dbg(f"p4 print failed: {e}")
-            return [(f"(cannot get depot version: {e})", "dim")]
+            return f"(cannot get depot version: {e})"
 
         try:
             local_raw = Path(entry.local_path).read_text(errors="replace")
         except OSError as e:
-            return [(f"(cannot read local file: {e})", "dim")]
+            return f"(cannot read local file: {e})"
 
-        diff_lines = list(difflib.unified_diff(
-            depot_raw.splitlines(keepends=True),
-            local_raw.splitlines(keepends=True),
+        return make_unified_diff(
+            depot_raw,
+            local_raw,
             fromfile=f"a/{entry.display_name}",
             tofile=f"b/{entry.display_name}",
-        ))
-        return _style_unified_diff(diff_lines)
+            ignore_whitespace=ignore_whitespace,
+        ) or "(no differences)"
 
     if entry.group == GROUP_ADDED:
         try:
             text = Path(entry.local_path).read_text(errors="replace")
         except OSError as e:
-            return [(f"(cannot read: {e})", "dim")]
-        lines: list[tuple[str, str]] = [
-            (f"new file: {entry.display_name}", f"bold {theme.DIFF_ADD}")
-        ]
-        lines += [("+" + ln, theme.DIFF_ADD) for ln in text.splitlines()]
-        return lines
+            return f"(cannot read: {e})"
+        return make_unified_diff(
+            "",
+            text,
+            fromfile="/dev/null",
+            tofile=f"b/{entry.display_name}",
+            ignore_whitespace=ignore_whitespace,
+        ) or "(no differences)"
 
     # GROUP_DELETED — read last depot revision
     _dbg(f"running: p4 print -q {entry.depot_path}")
@@ -144,10 +146,14 @@ def _fetch_diff(entry: FileEntry) -> list[tuple[str, str]]:
         raw = run_p4(["print", "-q", entry.depot_path])
         _dbg(f"p4 print returned {len(raw)} bytes")
     except P4Error as e:
-        return [(f"(cannot retrieve depot content: {e})", "dim")]
-    lines = [(f"deleted file: {entry.display_name}", f"bold {theme.DIFF_DEL}")]
-    lines += [("-" + ln, theme.DIFF_DEL) for ln in raw.splitlines()]
-    return lines
+        return f"(cannot retrieve depot content: {e})"
+    return make_unified_diff(
+        raw,
+        "",
+        fromfile=f"a/{entry.display_name}",
+        tofile="/dev/null",
+        ignore_whitespace=ignore_whitespace,
+    ) or "(no differences)"
 
 
 def _diff_stats(diff_lines: list[tuple[str, str]]) -> tuple[int, int]:
@@ -190,6 +196,7 @@ class DiffApp(App):
         Binding("]", "next_tab", "Next tab"),
         Binding("j", "scroll_down", "Scroll ↓", show=False),
         Binding("k", "scroll_up", "Scroll ↑", show=False),
+        Binding("w", "toggle_whitespace", "Whitespace", show=False),
         Binding("ctrl+f", "page_down", "Page ↓", show=False),
         Binding("ctrl+b", "page_up", "Page ↑", show=False),
         Binding("q", "quit", "Quit"),
@@ -198,15 +205,20 @@ class DiffApp(App):
     def __init__(
         self,
         groups: dict[str, list[FileEntry]],
-        initial_cache: dict[str, list[tuple[str, str]]] | None = None,
+        initial_cache: dict[str, str] | None = None,
+        *,
+        ignore_whitespace: bool = False,
     ) -> None:
         super().__init__()
         self.groups = groups
         self._indices: dict[str, int] = {g: 0 for g in _GROUPS}
-        self._cache: dict[str, list[tuple[str, str]]] = dict(initial_cache or {})
+        self._cache: dict[tuple[str, bool], str] = {
+            (path, False): raw for path, raw in (initial_cache or {}).items()
+        }
         self._active_group: str = next(
             (g for g in _GROUPS if groups.get(g)), GROUP_MODIFIED
         )
+        self._ignore_whitespace = ignore_whitespace
 
     def compose(self) -> ComposeResult:
         yield Tabs(
@@ -248,11 +260,13 @@ class DiffApp(App):
 
         idx = self._indices[self._active_group]
         entry = files[idx]
+        cache_key = (entry.depot_path, self._ignore_whitespace)
 
-        if entry.depot_path not in self._cache:
-            self._cache[entry.depot_path] = _fetch_diff(entry)
+        if cache_key not in self._cache:
+            self._cache[cache_key] = _fetch_diff(entry, ignore_whitespace=self._ignore_whitespace)
 
-        diff_lines = self._cache[entry.depot_path]
+        raw_diff = self._cache[cache_key]
+        diff_lines = _style_unified_diff(raw_diff)
         added, removed = _diff_stats(diff_lines)
 
         t = Text()
@@ -260,6 +274,8 @@ class DiffApp(App):
         if entry.group == GROUP_MODIFIED:
             t.append(f"  +{added}", style=f"bold {theme.DIFF_ADD}")
             t.append(f" -{removed}", style=f"bold {theme.DIFF_DEL}")
+        whitespace = "ignored" if self._ignore_whitespace else "significant"
+        t.append(f"  whitespace: {whitespace}", style="dim")
         header.update(t)
 
         log.clear()
@@ -313,6 +329,10 @@ class DiffApp(App):
     def action_page_up(self) -> None:
         self.query_one("#diff-log", RichLog).scroll_page_up()
 
+    def action_toggle_whitespace(self) -> None:
+        self._ignore_whitespace = not self._ignore_whitespace
+        self._refresh_view()
+
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -356,7 +376,46 @@ def _print_no_differences() -> None:
     Console().print("[dim]no differences[/dim]")
 
 
-def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None) -> None:
+def _load_opened_records(p4_path: str | None, files: tuple[str, ...], cl: str | None) -> list[dict]:
+    try:
+        if p4_path is not None:
+            p4_opened_args = ["opened"]
+            if cl:
+                p4_opened_args += ["-c", cl]
+            p4_opened_args.append(p4_path)
+            _dbg(f"running: p4 {' '.join(p4_opened_args)}")
+            return run_p4_tagged(p4_opened_args)
+
+        opened: list[dict] = []
+        for f in files:
+            _dbg(f"running: p4 opened {f}")
+            try:
+                opened += run_p4_tagged(["opened", os.path.abspath(f)])
+            except P4Error:
+                pass
+        return opened
+    except P4Error as e:
+        if "not opened" in str(e).lower():
+            return []
+        raise
+
+
+def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None, *, ignore_whitespace: bool) -> None:
+    if ignore_whitespace:
+        opened = _load_opened_records(p4_path, files, cl)
+        if not opened:
+            Console().print("[dim]no files open[/dim]")
+            return
+        rendered = join_rendered_diffs(
+            _fetch_diff(entry, ignore_whitespace=True)
+            for entry in _build_entries(opened)
+        )
+        if not rendered:
+            _print_no_differences()
+            return
+        click.echo(rendered, nl=False)
+        return
+
     scope_args = _scope_args(p4_path, files)
 
     if cl:
@@ -413,14 +472,29 @@ def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None) -
               shell_complete=complete_pending_cls)
 @click.option("-a", "--all", "show_all", is_flag=True,
               help="Diff all opened files across the entire depot")
+@click.option("-w", "--ignore-whitespace", is_flag=True,
+              help="Ignore whitespace-only changes when diffing")
 @click.option("--dummy-data", is_flag=True,
               help="Display sample output instead of querying Perforce")
-def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool, dummy_data: bool) -> None:
+def diff_cmd(
+    files: tuple[str, ...],
+    cl: str | None,
+    show_all: bool,
+    ignore_whitespace: bool,
+    dummy_data: bool,
+) -> None:
     """Browse diffs of opened files in an interactive TUI."""
-    _dbg(f"invoked: files={files!r} cl={cl!r} show_all={show_all!r}")
+    _dbg(
+        f"invoked: files={files!r} cl={cl!r} show_all={show_all!r} "
+        f"ignore_whitespace={ignore_whitespace!r}"
+    )
 
     if dummy_data:
-        DiffApp(build_diff_groups(), initial_cache=build_diff_cache()).run()
+        DiffApp(
+            build_diff_groups(),
+            initial_cache=build_diff_cache(),
+            ignore_whitespace=ignore_whitespace,
+        ).run()
         return
 
     if not show_all:
@@ -437,30 +511,10 @@ def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool, dummy_data:
     _dbg(f"p4_path={p4_path!r}")
 
     if not sys.stdout.isatty():
-        _run_cli_diff(p4_path, files, cl)
+        _run_cli_diff(p4_path, files, cl, ignore_whitespace=ignore_whitespace)
         return
 
-    try:
-        if p4_path is not None:
-            p4_opened_args = ["opened"]
-            if cl:
-                p4_opened_args += ["-c", cl]
-            p4_opened_args.append(p4_path)
-            _dbg(f"running: p4 {' '.join(p4_opened_args)}")
-            opened = run_p4_tagged(p4_opened_args)
-        else:
-            opened = []
-            for f in files:
-                _dbg(f"running: p4 opened {f}")
-                try:
-                    opened += run_p4_tagged(["opened", os.path.abspath(f)])
-                except P4Error:
-                    pass
-    except P4Error as e:
-        if "not opened" in str(e).lower():
-            opened = []
-        else:
-            raise
+    opened = _load_opened_records(p4_path, files, cl)
 
     _dbg(f"total opened records: {len(opened)}")
 
@@ -479,4 +533,4 @@ def diff_cmd(files: tuple[str, ...], cl: str | None, show_all: bool, dummy_data:
         f"D={len(groups[GROUP_DELETED])}"
     )
 
-    DiffApp(groups).run()
+    DiffApp(groups, ignore_whitespace=ignore_whitespace).run()

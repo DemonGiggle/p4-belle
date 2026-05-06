@@ -98,3 +98,34 @@ async def test_submit_detail_view_jk_scrolls_diff_panel():
             await pilot.pause()
             assert detail.scroll_y < moved_y
             assert lv.index == start_index
+
+
+@pytest.mark.asyncio
+async def test_w_toggles_whitespace_mode_for_submit_diff():
+    """Pressing w in submit diff view should toggle whitespace handling and refresh the status."""
+    from p5.tui.change_app import FileDiffView
+
+    app = _build_app()
+
+    def fake_fetch(_rec, *, ignore_whitespace=False):
+        if ignore_whitespace:
+            return "(no differences)"
+        return "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-value = 1\n+value    =    1\n"
+
+    with patch("p5.tui.submit_app._fetch_file_diff", side_effect=fake_fetch):
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("space")
+            await pilot.pause()
+
+            assert "whitespace:significant" in app.query_one("#footer-bar").content
+
+            await pilot.press("w")
+            await pilot.pause()
+
+            assert app._ignore_whitespace is True
+            assert True in app._detail_rec.diff_cache
+            assert "whitespace:ignored" in app.query_one("#footer-bar").content

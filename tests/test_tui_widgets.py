@@ -209,7 +209,7 @@ async def test_all_p5_tuis_use_fast_widgets():
             ]
         },
         initial_cache={
-            "//depot/myproject/src/alpha.cpp": [("diff src/alpha.cpp", "dim")]
+            "//depot/myproject/src/alpha.cpp": "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n line\n"
         },
     )
 

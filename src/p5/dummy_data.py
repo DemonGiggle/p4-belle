@@ -124,73 +124,93 @@ def build_diff_groups() -> dict[str, list]:
     }
 
 
-def build_diff_cache() -> dict[str, list[tuple[str, str]]]:
-    from p5 import theme as T
-
+def build_diff_cache() -> dict[str, str]:
     return {
-        "//depot/demo/src/auth/login.cpp": [
-            ("@@ -10,6 +10,8 @@", f"bold {T.DIFF_HUNK}"),
-            (" validate(user);", ""),
-            ("+log_attempt(user.name);", T.DIFF_ADD),
-            ("-old_log(user);", T.DIFF_DEL),
-            (" return check_token(user);", ""),
-        ],
-        "//depot/demo/src/auth/session.cpp": [
-            ("@@ -22,6 +22,9 @@", f"bold {T.DIFF_HUNK}"),
-            (" if (!session.valid()) return false;", ""),
-            ("+session.refresh();", T.DIFF_ADD),
-            ("+session.touch();", T.DIFF_ADD),
-            (" return session.persist();", ""),
-        ],
-        "//depot/demo/src/net/socket.cpp": [
-            ("@@ -50,4 +50,5 @@", f"bold {T.DIFF_HUNK}"),
-            (" connect_once();", ""),
-            ("+record_backoff_metric();", T.DIFF_ADD),
-            (" return true;", ""),
-        ],
-        "//depot/demo/src/net/retry.cpp": [
-            ("@@ -1,5 +1,7 @@", f"bold {T.DIFF_HUNK}"),
-            (" int attempts = 0;", ""),
-            ("+const int max_attempts = 5;", T.DIFF_ADD),
-            ("-const int max_attempts = 3;", T.DIFF_DEL),
-            (" while (attempts < max_attempts) {}", ""),
-        ],
-        "//depot/demo/src/ui/login_view.cpp": [
-            ("@@ -80,3 +80,5 @@", f"bold {T.DIFF_HUNK}"),
-            (" render_header();", ""),
-            ("+render_retry_hint();", T.DIFF_ADD),
-            (" render_form();", ""),
-        ],
-        "//depot/demo/src/auth/token_cache.cpp": [
-            ("new file: src/auth/token_cache.cpp", f"bold {T.DIFF_ADD}"),
-            ("+class TokenCache {", T.DIFF_ADD),
-            ("+    bool warm = true;", T.DIFF_ADD),
-            ("+};", T.DIFF_ADD),
-        ],
-        "//depot/demo/src/auth/retry_cache.cpp": [
-            ("new file: src/auth/retry_cache.cpp", f"bold {T.DIFF_ADD}"),
-            ("+struct RetryCache {", T.DIFF_ADD),
-            ("+    int attempts = 0;", T.DIFF_ADD),
-            ("+};", T.DIFF_ADD),
-        ],
-        "//depot/demo/src/tools/demo_seed.cpp": [
-            ("new file: src/tools/demo_seed.cpp", f"bold {T.DIFF_ADD}"),
-            ("+void seed_demo_data();", T.DIFF_ADD),
-        ],
-        "//depot/demo/src/legacy/old_auth.cpp": [
-            ("deleted file: src/legacy/old_auth.cpp", f"bold {T.DIFF_DEL}"),
-            ("-int legacy_auth() {", T.DIFF_DEL),
-            ("-    return 0;", T.DIFF_DEL),
-            ("-}", T.DIFF_DEL),
-        ],
-        "//depot/demo/src/legacy/old_policy.cpp": [
-            ("deleted file: src/legacy/old_policy.cpp", f"bold {T.DIFF_DEL}"),
-            ("-bool legacy_policy_enabled();", T.DIFF_DEL),
-        ],
-        "//depot/demo/src/legacy/old_login_ui.cpp": [
-            ("deleted file: src/legacy/old_login_ui.cpp", f"bold {T.DIFF_DEL}"),
-            ("-void render_old_login_ui();", T.DIFF_DEL),
-        ],
+        "//depot/demo/src/auth/login.cpp": "\n".join([
+            "--- a/src/auth/login.cpp",
+            "+++ b/src/auth/login.cpp",
+            "@@ -10,6 +10,8 @@",
+            " validate(user);",
+            "+log_attempt(user.name);",
+            "-old_log(user);",
+            " return check_token(user);",
+        ]),
+        "//depot/demo/src/auth/session.cpp": "\n".join([
+            "--- a/src/auth/session.cpp",
+            "+++ b/src/auth/session.cpp",
+            "@@ -22,6 +22,9 @@",
+            " if (!session.valid()) return false;",
+            "+session.refresh();",
+            "+session.touch();",
+            " return session.persist();",
+        ]),
+        "//depot/demo/src/net/socket.cpp": "\n".join([
+            "--- a/src/net/socket.cpp",
+            "+++ b/src/net/socket.cpp",
+            "@@ -50,4 +50,5 @@",
+            " connect_once();",
+            "+record_backoff_metric();",
+            " return true;",
+        ]),
+        "//depot/demo/src/net/retry.cpp": "\n".join([
+            "--- a/src/net/retry.cpp",
+            "+++ b/src/net/retry.cpp",
+            "@@ -1,5 +1,7 @@",
+            " int attempts = 0;",
+            "+const int max_attempts = 5;",
+            "-const int max_attempts = 3;",
+            " while (attempts < max_attempts) {}",
+        ]),
+        "//depot/demo/src/ui/login_view.cpp": "\n".join([
+            "--- a/src/ui/login_view.cpp",
+            "+++ b/src/ui/login_view.cpp",
+            "@@ -80,3 +80,5 @@",
+            " render_header();",
+            "+render_retry_hint();",
+            " render_form();",
+        ]),
+        "//depot/demo/src/auth/token_cache.cpp": "\n".join([
+            "--- /dev/null",
+            "+++ b/src/auth/token_cache.cpp",
+            "@@ -0,0 +1,3 @@",
+            "+class TokenCache {",
+            "+    bool warm = true;",
+            "+};",
+        ]),
+        "//depot/demo/src/auth/retry_cache.cpp": "\n".join([
+            "--- /dev/null",
+            "+++ b/src/auth/retry_cache.cpp",
+            "@@ -0,0 +1,3 @@",
+            "+struct RetryCache {",
+            "+    int attempts = 0;",
+            "+};",
+        ]),
+        "//depot/demo/src/tools/demo_seed.cpp": "\n".join([
+            "--- /dev/null",
+            "+++ b/src/tools/demo_seed.cpp",
+            "@@ -0,0 +1 @@",
+            "+void seed_demo_data();",
+        ]),
+        "//depot/demo/src/legacy/old_auth.cpp": "\n".join([
+            "--- a/src/legacy/old_auth.cpp",
+            "+++ /dev/null",
+            "@@ -1,3 +0,0 @@",
+            "-int legacy_auth() {",
+            "-    return 0;",
+            "-}",
+        ]),
+        "//depot/demo/src/legacy/old_policy.cpp": "\n".join([
+            "--- a/src/legacy/old_policy.cpp",
+            "+++ /dev/null",
+            "@@ -1 +0,0 @@",
+            "-bool legacy_policy_enabled();",
+        ]),
+        "//depot/demo/src/legacy/old_login_ui.cpp": "\n".join([
+            "--- a/src/legacy/old_login_ui.cpp",
+            "+++ /dev/null",
+            "@@ -1 +0,0 @@",
+            "-void render_old_login_ui();",
+        ]),
     }
 
 

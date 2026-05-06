@@ -610,6 +610,41 @@ async def test_detail_view_jk_scrolls_diff_panel():
 
 
 @pytest.mark.asyncio
+async def test_w_toggles_whitespace_mode_for_change_diff():
+    """Pressing w in diff view should toggle whitespace handling and refresh the status."""
+    from p5.tui.change_app import ChangeApp, FileDiffView
+
+    def fake_fetch(_rec, *, ignore_whitespace=False):
+        if ignore_whitespace:
+            return "(no differences)"
+        return "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-value = 1\n+value    =    1\n"
+
+    patches = _make_patches()
+    patches.append(patch("p5.tui.change_app._fetch_file_diff", side_effect=fake_fetch))
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("space")
+            await pilot.pause()
+
+            assert "whitespace:significant" in app.query_one("#footer-bar").content
+
+            await pilot.press("w")
+            await pilot.pause()
+
+            assert app._ignore_whitespace is True
+            assert True in app._detail_rec.diff_cache
+            assert "whitespace:ignored" in app.query_one("#footer-bar").content
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
 async def test_cursor_skips_section_headers():
     """j/k navigation should skip disabled section header items."""
     from p5.tui.change_app import ChangeApp

@@ -1,7 +1,6 @@
 """Interactive TUI for managing the default changelist."""
 from __future__ import annotations
 
-import difflib
 import re as _re
 import subprocess
 from pathlib import Path
@@ -16,6 +15,7 @@ from textual.widget import Widget
 from textual.widgets import Input, ListItem, ListView, Static
 
 from p5 import theme as T
+from p5.diff_utils import make_unified_diff
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.changes_app import _colorize_diff
 from p5.tui.widgets import FastListView, FastScrollableContainer
@@ -25,7 +25,16 @@ from p5.workspace import any_to_rel, get_workspace
 # ── Data ──────────────────────────────────────────────────────────────────────
 
 class FileRecord:
-    __slots__ = ("depot_file", "rel_path", "action", "local_path", "file_type", "diff", "diff_loaded")
+    __slots__ = (
+        "depot_file",
+        "rel_path",
+        "action",
+        "local_path",
+        "file_type",
+        "diff",
+        "diff_loaded",
+        "diff_cache",
+    )
 
     def __init__(
         self,
@@ -42,6 +51,7 @@ class FileRecord:
         self.file_type = file_type
         self.diff = ""
         self.diff_loaded = False
+        self.diff_cache: dict[bool, str] = {}
 
 
 def _esc(text: str) -> str:
@@ -86,22 +96,24 @@ class FileDiffView(FastScrollableContainer):
     }
     """
 
-    def update_content(self, rec: FileRecord) -> None:
+    def update_content(self, rec: FileRecord, *, ignore_whitespace: bool) -> None:
         self.remove_children()
 
         letter = T.STATE_LETTER.get(rec.action, rec.action[0].upper())
         color = T.ACTION_COLOR.get(rec.action, "white")
+        whitespace = "ignored" if ignore_whitespace else "significant"
         widgets: list[Widget] = [
             Static(
                 f"[bold white]{_esc(rec.rel_path)}[/bold white]  "
                 f"[{color}]{letter}[/{color}]  [dim]{_esc(rec.action)}[/dim]",
                 markup=True,
             ),
+            Static(f"[dim]Whitespace: {whitespace}[/dim]", markup=True),
             Static(""),
         ]
 
         if rec.diff:
-            for line in _colorize_diff(rec.diff):
+            for line in _colorize_diff(rec.diff, ignore_whitespace=ignore_whitespace):
                 widgets.append(Static(line, markup=True))
         else:
             widgets.append(Static("[dim](diff unavailable)[/dim]", markup=True))
@@ -138,7 +150,7 @@ def _read_text(path: str) -> str:
     return Path(path).read_text(errors="replace")
 
 
-def _fetch_file_diff(rec: FileRecord) -> str:
+def _fetch_file_diff(rec: FileRecord, *, ignore_whitespace: bool = False) -> str:
     base_type = rec.file_type.split("+")[0].lower()
     if base_type in _BINARY_TYPES:
         return "(binary file — diff not shown)"
@@ -148,26 +160,32 @@ def _fetch_file_diff(rec: FileRecord) -> str:
             local_raw = _read_text(rec.local_path)
         except OSError as e:
             return f"(cannot read local file: {e})"
-        diff_lines = difflib.unified_diff(
-            [],
-            local_raw.splitlines(keepends=True),
+        return (
+            make_unified_diff(
+            "",
+            local_raw,
             fromfile="/dev/null",
             tofile=f"b/{rec.rel_path}",
+            ignore_whitespace=ignore_whitespace,
         )
-        return "".join(diff_lines) or "(no differences)"
+            or "(no differences)"
+        )
 
     if rec.action in _DELETE_ACTIONS:
         try:
             depot_raw = run_p4(["print", "-q", rec.depot_file])
         except P4Error as e:
             return f"(cannot retrieve depot content: {e})"
-        diff_lines = difflib.unified_diff(
-            depot_raw.splitlines(keepends=True),
-            [],
+        return (
+            make_unified_diff(
+            depot_raw,
+            "",
             fromfile=f"a/{rec.rel_path}",
             tofile="/dev/null",
+            ignore_whitespace=ignore_whitespace,
         )
-        return "".join(diff_lines) or "(no differences)"
+            or "(no differences)"
+        )
 
     try:
         depot_raw = run_p4(["print", "-q", f"{rec.depot_file}#have"])
@@ -179,13 +197,16 @@ def _fetch_file_diff(rec: FileRecord) -> str:
     except OSError as e:
         return f"(cannot read local file: {e})"
 
-    diff_lines = difflib.unified_diff(
-        depot_raw.splitlines(keepends=True),
-        local_raw.splitlines(keepends=True),
-        fromfile=f"a/{rec.rel_path}",
-        tofile=f"b/{rec.rel_path}",
+    return (
+        make_unified_diff(
+            depot_raw,
+            local_raw,
+            fromfile=f"a/{rec.rel_path}",
+            tofile=f"b/{rec.rel_path}",
+            ignore_whitespace=ignore_whitespace,
+        )
+        or "(no differences)"
     )
-    return "".join(diff_lines) or "(no differences)"
 
 
 # ── CL Selector Modal ────────────────────────────────────────────────────────
@@ -443,6 +464,7 @@ class ChangeApp(App):
         Binding("j,down", "cursor_down",  "Down",       show=False),
         Binding("k,up",   "cursor_up",    "Up",         show=False),
         Binding("space",  "view_diff",    "Diff"),
+        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("a",      "select_all",   "Select All"),
         Binding("n",      "new_cl",       "New CL"),
         Binding("m",      "move_to_cl",   "Move"),
@@ -472,6 +494,8 @@ class ChangeApp(App):
         self._filter_text: str = ""
         self._filter_just_committed: bool = False
         self._detail_open: bool = False
+        self._ignore_whitespace: bool = False
+        self._detail_rec: FileRecord | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -483,16 +507,27 @@ class ChangeApp(App):
         yield FileDiffView(id="detail-view")
         yield Input(placeholder="Filter files…", id="filter-input")
         yield Static("", id="filter-bar", markup=True)
-        yield Static(
-            "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  [dim]a[/dim] all  "
-            "[dim]n[/dim] new CL  [dim]m[/dim] move  [dim]r[/dim] revert  "
-            "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit",
-            id="footer-bar",
-            markup=True,
-        )
+        yield Static("", id="footer-bar", markup=True)
 
     def on_mount(self) -> None:
         self._load_files()
+        self._update_footer()
+
+    def _update_footer(self) -> None:
+        fb = self.query_one("#footer-bar", Static)
+        whitespace = "ignored" if self._ignore_whitespace else "significant"
+        if self._detail_open:
+            fb.update(
+                f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                "[dim]Esc[/dim] back  [dim]q[/dim] quit"
+            )
+            return
+        fb.update(
+            "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  "
+            f"[dim]w[/dim] whitespace:{whitespace}  [dim]a[/dim] all  "
+            "[dim]n[/dim] new CL  [dim]m[/dim] move  [dim]r[/dim] revert  "
+            "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit"
+        )
 
     # ── data loading ──────────────────────────────────────────────────────
 
@@ -780,28 +815,43 @@ class ChangeApp(App):
         lv.display = False
         dv.display = True
         self._detail_open = True
-
-        if rec.diff_loaded:
-            dv.update_content(rec)
-            return
-
-        dv.show_loading()
-        self._load_detail(rec)
+        self._detail_rec = rec
+        self._update_footer()
+        self._refresh_detail(rec)
 
     def _close_detail(self) -> None:
         self.query_one("#detail-view", FileDiffView).display = False
         self.query_one("#file-list", ListView).display = True
         self._detail_open = False
+        self._detail_rec = None
+        self._update_footer()
+
+    def action_toggle_whitespace(self) -> None:
+        self._ignore_whitespace = not self._ignore_whitespace
+        self._update_footer()
+        if self._detail_open and self._detail_rec is not None:
+            self._refresh_detail(self._detail_rec)
+
+    def _refresh_detail(self, rec: FileRecord) -> None:
+        dv = self.query_one("#detail-view", FileDiffView)
+        if self._ignore_whitespace in rec.diff_cache:
+            rec.diff = rec.diff_cache[self._ignore_whitespace]
+            rec.diff_loaded = True
+            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
+            return
+        dv.show_loading()
+        self._load_detail(rec)
 
     @work(thread=True)
     def _load_detail(self, rec: FileRecord) -> None:
         if self._demo_mode:
             rec.diff = self._demo_diffs.get(rec.depot_file, "(diff unavailable)")
         else:
-            rec.diff = _fetch_file_diff(rec)
+            rec.diff = _fetch_file_diff(rec, ignore_whitespace=self._ignore_whitespace)
+        rec.diff_cache[self._ignore_whitespace] = rec.diff
         rec.diff_loaded = True
         dv = self.query_one("#detail-view", FileDiffView)
-        self.call_from_thread(dv.update_content, rec)
+        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
 
     # ── filter mode ───────────────────────────────────────────────────────
 

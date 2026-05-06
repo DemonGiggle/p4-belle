@@ -22,7 +22,7 @@ from p5.workspace import any_to_rel
 # ── Data ──────────────────────────────────────────────────────────────────────
 
 class FileRecord:
-    __slots__ = ("depot_file", "rel_path", "action", "local_path", "file_type", "diff", "diff_loaded")
+    __slots__ = ("depot_file", "rel_path", "action", "local_path", "file_type", "diff", "diff_loaded", "diff_cache")
 
     def __init__(
         self,
@@ -39,6 +39,7 @@ class FileRecord:
         self.file_type = file_type
         self.diff = ""
         self.diff_loaded = False
+        self.diff_cache: dict[bool, str] = {}
 
 
 class PendingCL:
@@ -453,6 +454,7 @@ class SubmitApp(App):
         Binding("enter",  "select_item", "Select",      show=False),
         Binding("escape", "go_back",     "Back"),
         Binding("space",  "view_diff",   "Diff",        show=False),
+        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("m",      "move_file",   "Move"),
         Binding("r",      "revert_file", "Revert"),
         Binding("u",      "revert_unchanged", "Revert unchanged"),
@@ -475,6 +477,8 @@ class SubmitApp(App):
         self._filter_text: str = ""
         self._filter_just_committed: bool = False
         self._detail_open: bool = False
+        self._ignore_whitespace: bool = False
+        self._detail_rec: FileRecord | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -495,12 +499,18 @@ class SubmitApp(App):
 
     def _update_footer(self) -> None:
         fb = self.query_one("#footer-bar", Static)
+        whitespace = "ignored" if self._ignore_whitespace else "significant"
         if self._current_cl:
             if self._detail_open:
-                fb.update("[dim]j/k[/dim] scroll diff  [dim]Esc[/dim] back  [dim]q[/dim] quit")
+                fb.update(
+                    f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                    "[dim]Esc[/dim] back  [dim]q[/dim] quit"
+                )
             else:
                 fb.update(
-                    "[dim]space[/dim] diff  [dim]m[/dim] move  [dim]r[/dim] revert  "
+                    "[dim]space[/dim] diff  "
+                    f"[dim]w[/dim] whitespace:{whitespace}  "
+                    "[dim]m[/dim] move  [dim]r[/dim] revert  "
                     "[dim]u[/dim] revert unchanged  [dim]e[/dim] edit desc  "
                     "[dim]s[/dim] submit  [dim]Esc[/dim] back  [dim]q[/dim] quit"
                 )
@@ -528,6 +538,7 @@ class SubmitApp(App):
     def _show_cl_list(self) -> None:
         self._current_cl = None
         self._detail_open = False
+        self._detail_rec = None
         self._update_footer()
         self.query_one("#detail-view", FileDiffView).display = False
         lv = self.query_one("#main-list", ListView)
@@ -553,6 +564,7 @@ class SubmitApp(App):
     def _show_cl_detail(self, pcl: PendingCL) -> None:
         self._current_cl = pcl
         self._detail_open = False
+        self._detail_rec = None
         self._update_footer()
         self.query_one("#detail-view", FileDiffView).display = False
         lv = self.query_one("#main-list", ListView)
@@ -929,36 +941,49 @@ class SubmitApp(App):
         if isinstance(item, FileRecord):
             self._open_detail(item)
 
+    def action_toggle_whitespace(self) -> None:
+        self._ignore_whitespace = not self._ignore_whitespace
+        self._update_footer()
+        if self._detail_open and self._detail_rec is not None:
+            self._refresh_detail(self._detail_rec)
+
     def _open_detail(self, rec: FileRecord) -> None:
         lv = self.query_one("#main-list", ListView)
         dv = self.query_one("#detail-view", FileDiffView)
         lv.display = False
         dv.display = True
         self._detail_open = True
+        self._detail_rec = rec
         self._update_footer()
-
-        if rec.diff_loaded:
-            dv.update_content(rec)
-            return
-
-        dv.show_loading()
-        self._load_detail(rec)
+        self._refresh_detail(rec)
 
     def _close_detail(self) -> None:
         self.query_one("#detail-view", FileDiffView).display = False
         self.query_one("#main-list", ListView).display = True
         self._detail_open = False
+        self._detail_rec = None
         self._update_footer()
+
+    def _refresh_detail(self, rec: FileRecord) -> None:
+        dv = self.query_one("#detail-view", FileDiffView)
+        if self._ignore_whitespace in rec.diff_cache:
+            rec.diff = rec.diff_cache[self._ignore_whitespace]
+            rec.diff_loaded = True
+            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
+            return
+        dv.show_loading()
+        self._load_detail(rec)
 
     @work(thread=True)
     def _load_detail(self, rec: FileRecord) -> None:
         if self._demo_mode:
             rec.diff = "(diff unavailable)"
         else:
-            rec.diff = _fetch_file_diff(rec)
+            rec.diff = _fetch_file_diff(rec, ignore_whitespace=self._ignore_whitespace)
+        rec.diff_cache[self._ignore_whitespace] = rec.diff
         rec.diff_loaded = True
         dv = self.query_one("#detail-view", FileDiffView)
-        self.call_from_thread(dv.update_content, rec)
+        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
 
     def _move_demo_file(self, item: FileRecord) -> None:
         if not self._current_cl:

@@ -14,6 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
+from p5.diff_utils import filter_unified_diff
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel
@@ -129,9 +130,10 @@ class DiffView(FastScrollableContainer):
     }
     """
 
-    def update_content(self, rec: ChangeRecord) -> None:
+    def update_content(self, rec: ChangeRecord, *, ignore_whitespace: bool) -> None:
         self.remove_children()
 
+        whitespace = "ignored" if ignore_whitespace else "significant"
         widgets: list[Widget] = []
         widgets.append(Static(
             f"[bold white]CL {rec.cl}[/bold white]  "
@@ -140,6 +142,7 @@ class DiffView(FastScrollableContainer):
             markup=True,
         ))
         widgets.append(Static(f"  [white]{rec.description}[/white]", markup=True))
+        widgets.append(Static(f"[dim]Whitespace: {whitespace}[/dim]", markup=True))
         widgets.append(Static(""))
 
         if rec.files:
@@ -153,7 +156,7 @@ class DiffView(FastScrollableContainer):
         if rec.diff:
             widgets.append(Static("[bold white]Diff:[/bold white]", markup=True))
             widgets.append(Static("─" * 60))
-            for line in _colorize_diff(rec.diff):
+            for line in _colorize_diff(rec.diff, ignore_whitespace=ignore_whitespace):
                 widgets.append(Static(line, markup=True))
 
         for w in widgets:
@@ -236,7 +239,10 @@ def _highlight(code: str, lexer) -> str:
 
 # ── Diff renderer ─────────────────────────────────────────────────────────────
 
-def _colorize_diff(raw: str) -> list[str]:
+def _colorize_diff(raw: str, *, ignore_whitespace: bool = False) -> list[str]:
+    raw = filter_unified_diff(raw, ignore_whitespace=ignore_whitespace)
+    if not raw.strip():
+        return ["[dim](no differences)[/dim]"]
     out: list[str] = []
     lexer = None   # updated each time we see a new file header
 
@@ -328,6 +334,7 @@ class ChangesApp(App):
         Binding("down",   "cursor_down",  "Down",   show=False),
         Binding("k",      "cursor_up",    "Up",     show=False),
         Binding("up",     "cursor_up",    "Up",     show=False),
+        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("escape", "collapse",     "Back",   show=True),
         Binding("slash",  "start_filter", "Filter", show=True),
         Binding("r",      "reload",       "Reload", show=True),
@@ -355,6 +362,8 @@ class ChangesApp(App):
         self._filter_buf: str = ""
         self._filtering: bool = False
         self._filter_just_committed: bool = False
+        self._ignore_whitespace: bool = False
+        self._detail_rec: ChangeRecord | None = None
 
     def compose(self) -> ComposeResult:
         path_hint = "" if self._p4_path == "//..." else f"  [dim cyan]{any_to_rel(self._p4_path.removesuffix('/...'))}[/dim cyan]"
@@ -462,6 +471,14 @@ class ChangesApp(App):
         self.query_one("#list-view", ListView).clear()
         self._load_changes()
 
+    def action_toggle_whitespace(self) -> None:
+        self._ignore_whitespace = not self._ignore_whitespace
+        if self.detail_open and self._detail_rec is not None:
+            self.query_one("#detail-view", DiffView).update_content(
+                self._detail_rec,
+                ignore_whitespace=self._ignore_whitespace,
+            )
+
     # ── Key handling for filter input ─────────────────────────────────────────
 
     def on_key(self, event) -> None:
@@ -529,9 +546,10 @@ class ChangesApp(App):
         lv.display = False
         dv.display = True
         self.detail_open = True
+        self._detail_rec = rec
 
         if rec.loaded:
-            dv.update_content(rec)
+            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
         else:
             dv.show_loading()
             self._load_detail(rec)
@@ -542,13 +560,14 @@ class ChangesApp(App):
         dv.display = False
         lv.display = True
         self.detail_open = False
+        self._detail_rec = None
 
     @work(thread=True)
     def _load_detail(self, rec: ChangeRecord) -> None:
         if self._demo_records is not None:
             dv = self.query_one("#detail-view", DiffView)
-            self.call_from_thread(dv.update_content, rec)
+            self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
             return
         _fetch_detail(rec)
         dv = self.query_one("#detail-view", DiffView)
-        self.call_from_thread(dv.update_content, rec)
+        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
