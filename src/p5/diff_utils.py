@@ -7,6 +7,7 @@ from typing import Iterable
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 _SKIP_METADATA_RE = re.compile(r"^(Change|Date|User|Client|Description|Files|Affected|Differences).*:")
+_P4_HEADER_RE = re.compile(r"^====\s+(.+?)(?:#\d+)?(?:\s+\(.+\))?\s+====$")
 
 
 def _normalize_whitespace(text: str) -> str:
@@ -169,3 +170,118 @@ def join_rendered_diffs(parts: Iterable[str]) -> str:
     if not kept:
         return ""
     return "\n\n".join(kept) + "\n"
+
+
+def _display_path(fromfile: str, tofile: str) -> str:
+    for candidate in (tofile, fromfile):
+        if candidate and candidate != "/dev/null":
+            if candidate.startswith(("a/", "b/")):
+                return candidate[2:]
+            return candidate
+    return "(unknown)"
+
+
+def _fit_side(text: str, width: int) -> str:
+    text = text.expandtabs(4)
+    if len(text) > width:
+        return text[: max(1, width - 1)] + "…"
+    return text.ljust(width)
+
+
+def _format_side_by_side_row(left_prefix: str, left: str, right_prefix: str, right: str, width: int) -> str:
+    return f"{left_prefix} {_fit_side(left, width)} │ {right_prefix} {_fit_side(right, width)}"
+
+
+def render_side_by_side(
+    raw: str,
+    *,
+    ignore_whitespace: bool = False,
+    column_width: int = 56,
+) -> list[str]:
+    raw = filter_unified_diff(raw, ignore_whitespace=ignore_whitespace)
+    if not raw.strip():
+        return ["(no differences)"]
+
+    lines = raw.splitlines()
+    out: list[str] = []
+    idx = 0
+    pending_p4_header: str | None = None
+
+    while idx < len(lines):
+        line = lines[idx]
+        if _SKIP_METADATA_RE.match(line):
+            idx += 1
+            continue
+
+        if match := _P4_HEADER_RE.match(line):
+            pending_p4_header = match.group(1)
+            idx += 1
+            continue
+
+        if line.startswith("diff "):
+            out.append(line)
+            idx += 1
+            continue
+
+        if line.startswith("--- "):
+            fromfile = line[4:]
+            idx += 1
+            tofile = ""
+            if idx < len(lines) and lines[idx].startswith("+++ "):
+                tofile = lines[idx][4:]
+                idx += 1
+            out.append(f"diff {pending_p4_header or _display_path(fromfile, tofile)}")
+            pending_p4_header = None
+            continue
+
+        if line.startswith("@@"):
+            out.append(line)
+            idx += 1
+            hunk_lines: list[str] = []
+            while idx < len(lines) and not lines[idx].startswith(("@@", "==== ", "diff ", "--- ")):
+                hunk_lines.append(lines[idx])
+                idx += 1
+
+            cursor = 0
+            while cursor < len(hunk_lines):
+                current = hunk_lines[cursor]
+                if current.startswith(" "):
+                    text = current[1:]
+                    out.append(_format_side_by_side_row(" ", text, " ", text, column_width))
+                    cursor += 1
+                    continue
+
+                if current.startswith("-"):
+                    removed: list[str] = []
+                    added: list[str] = []
+                    while cursor < len(hunk_lines) and hunk_lines[cursor].startswith("-"):
+                        removed.append(hunk_lines[cursor][1:])
+                        cursor += 1
+                    while cursor < len(hunk_lines) and hunk_lines[cursor].startswith("+"):
+                        added.append(hunk_lines[cursor][1:])
+                        cursor += 1
+                    for row in range(max(len(removed), len(added))):
+                        left = removed[row] if row < len(removed) else ""
+                        right = added[row] if row < len(added) else ""
+                        left_prefix = "-" if row < len(removed) else " "
+                        right_prefix = "+" if row < len(added) else " "
+                        out.append(_format_side_by_side_row(left_prefix, left, right_prefix, right, column_width))
+                    continue
+
+                if current.startswith("+"):
+                    added: list[str] = []
+                    while cursor < len(hunk_lines) and hunk_lines[cursor].startswith("+"):
+                        added.append(hunk_lines[cursor][1:])
+                        cursor += 1
+                    for text in added:
+                        out.append(_format_side_by_side_row(" ", "", "+", text, column_width))
+                    continue
+
+                cursor += 1
+            continue
+
+        pending_p4_header = None
+        out.append(line)
+        idx += 1
+
+    return out

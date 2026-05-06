@@ -14,7 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
-from p5.diff_utils import filter_unified_diff
+from p5.diff_utils import filter_unified_diff, render_side_by_side
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel
@@ -130,10 +130,17 @@ class DiffView(FastScrollableContainer):
     }
     """
 
-    def update_content(self, rec: ChangeRecord, *, ignore_whitespace: bool) -> None:
+    def update_content(
+        self,
+        rec: ChangeRecord,
+        *,
+        ignore_whitespace: bool,
+        side_by_side: bool,
+    ) -> None:
         self.remove_children()
 
         whitespace = "ignored" if ignore_whitespace else "significant"
+        view_mode = "side-by-side" if side_by_side else "unified"
         widgets: list[Widget] = []
         widgets.append(Static(
             f"[bold white]CL {rec.cl}[/bold white]  "
@@ -142,7 +149,7 @@ class DiffView(FastScrollableContainer):
             markup=True,
         ))
         widgets.append(Static(f"  [white]{rec.description}[/white]", markup=True))
-        widgets.append(Static(f"[dim]Whitespace: {whitespace}[/dim]", markup=True))
+        widgets.append(Static(f"[dim]Whitespace: {whitespace}  View: {view_mode}[/dim]", markup=True))
         widgets.append(Static(""))
 
         if rec.files:
@@ -156,7 +163,11 @@ class DiffView(FastScrollableContainer):
         if rec.diff:
             widgets.append(Static("[bold white]Diff:[/bold white]", markup=True))
             widgets.append(Static("─" * 60))
-            for line in _colorize_diff(rec.diff, ignore_whitespace=ignore_whitespace):
+            for line in _render_diff_lines(
+                rec.diff,
+                ignore_whitespace=ignore_whitespace,
+                side_by_side=side_by_side,
+            ):
                 widgets.append(Static(line, markup=True))
 
         for w in widgets:
@@ -293,6 +304,13 @@ def _esc(s: str) -> str:
     return s.replace("[", "\\[").replace("]", "\\]")
 
 
+def _render_diff_lines(raw: str, *, ignore_whitespace: bool = False, side_by_side: bool = False) -> list[str]:
+    if side_by_side:
+        rendered = render_side_by_side(raw, ignore_whitespace=ignore_whitespace)
+        return [f"[white]{_esc(line)}[/white]" for line in rendered]
+    return _colorize_diff(raw, ignore_whitespace=ignore_whitespace)
+
+
 # ─── Main App ────────────────────────────────────────────────────────────────
 
 class ChangesApp(App):
@@ -334,6 +352,7 @@ class ChangesApp(App):
         Binding("down",   "cursor_down",  "Down",   show=False),
         Binding("k",      "cursor_up",    "Up",     show=False),
         Binding("up",     "cursor_up",    "Up",     show=False),
+        Binding("b",      "toggle_side_by_side", "View", show=False),
         Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("escape", "collapse",     "Back",   show=True),
         Binding("slash",  "start_filter", "Filter", show=True),
@@ -363,6 +382,7 @@ class ChangesApp(App):
         self._filtering: bool = False
         self._filter_just_committed: bool = False
         self._ignore_whitespace: bool = False
+        self._side_by_side: bool = False
         self._detail_rec: ChangeRecord | None = None
 
     def compose(self) -> ComposeResult:
@@ -477,6 +497,16 @@ class ChangesApp(App):
             self.query_one("#detail-view", DiffView).update_content(
                 self._detail_rec,
                 ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
+
+    def action_toggle_side_by_side(self) -> None:
+        self._side_by_side = not self._side_by_side
+        if self.detail_open and self._detail_rec is not None:
+            self.query_one("#detail-view", DiffView).update_content(
+                self._detail_rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
             )
 
     # ── Key handling for filter input ─────────────────────────────────────────
@@ -549,7 +579,11 @@ class ChangesApp(App):
         self._detail_rec = rec
 
         if rec.loaded:
-            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
+            dv.update_content(
+                rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
         else:
             dv.show_loading()
             self._load_detail(rec)
@@ -566,8 +600,18 @@ class ChangesApp(App):
     def _load_detail(self, rec: ChangeRecord) -> None:
         if self._demo_records is not None:
             dv = self.query_one("#detail-view", DiffView)
-            self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
+            self.call_from_thread(
+                dv.update_content,
+                rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
             return
         _fetch_detail(rec)
         dv = self.query_one("#detail-view", DiffView)
-        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
+        self.call_from_thread(
+            dv.update_content,
+            rec,
+            ignore_whitespace=self._ignore_whitespace,
+            side_by_side=self._side_by_side,
+        )

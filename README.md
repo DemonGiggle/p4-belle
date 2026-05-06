@@ -108,9 +108,9 @@ diff src/auth/login.cpp  (#41 → working copy)
      return check_token(u);
 ```
 
-Options: `-c CL` to diff a specific changelist, `-w` to ignore whitespace-only changes.
+Options: `-c CL` to diff a specific changelist, `-w` to ignore whitespace-only changes, `--side-by-side` for a split view.
 
-> For syntax-highlighted diffs, use `p5 changes` and press `Enter` to expand a changelist. In any diff view, press `w` to toggle whether spaces and tabs count as changes.
+> For syntax-highlighted diffs, use `p5 changes` and press `Enter` to expand a changelist. In any diff view, press `w` to toggle whether spaces and tabs count as changes, and `b` to switch between unified and side-by-side layouts.
 
 ### `p5 delete <files...>`
 
@@ -184,7 +184,7 @@ Interactive TUI for browsing submitted (or pending) changelists.
  [j/k: navigate]  [Enter: expand]  [/: filter]  [q: quit]
 ```
 
-Press `Enter` to expand a changelist — shows files changed and a full colored, syntax-highlighted diff. Press `w` in the detail view to ignore or restore whitespace-only changes. Press `Esc` to go back.
+Press `Enter` to expand a changelist — shows files changed and a full colored, syntax-highlighted diff. Press `w` in the detail view to ignore or restore whitespace-only changes, `b` to switch to side-by-side view, and `Esc` to go back.
 
 ```sh
 p5 changes -u alice          # filter by user
@@ -208,7 +208,7 @@ p5 change
 [Enter: toggle] [space: diff] [a: all] [n: new CL] [m: move] [r: revert] [/: filter] [q: quit]
 ```
 
-Select files with `Enter`, show the highlighted file diff with `space`, toggle whitespace handling with `w`, filter with `/`, then:
+Select files with `Enter`, show the highlighted file diff with `space`, toggle whitespace handling with `w`, switch between unified and side-by-side with `b`, filter with `/`, then:
 - `n` — create a new changelist with selected files (enter a description)
 - `m` — move selected files to an existing pending changelist (popup picker)
 - `a` — select all visible files
@@ -224,7 +224,7 @@ p5 change -d 123456  # delete empty CL
 
 Show pending files, confirm, then submit.
 
-In changelist detail, press `space` to open the highlighted file diff and `w` to toggle whether whitespace-only changes are shown.
+In changelist detail, press `space` to open the highlighted file diff, `w` to toggle whether whitespace-only changes are shown, and `b` to switch between unified and side-by-side layouts.
 
 ```sh
 p5 submit             # submit default changelist

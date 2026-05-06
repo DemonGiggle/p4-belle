@@ -17,7 +17,7 @@ from textual.widgets import Footer, RichLog, Static, Tab, Tabs
 
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
-from p5.diff_utils import join_rendered_diffs, make_unified_diff
+from p5.diff_utils import join_rendered_diffs, make_unified_diff, render_side_by_side
 from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastRichLog
@@ -196,6 +196,7 @@ class DiffApp(App):
         Binding("]", "next_tab", "Next tab"),
         Binding("j", "scroll_down", "Scroll ↓", show=False),
         Binding("k", "scroll_up", "Scroll ↑", show=False),
+        Binding("b", "toggle_side_by_side", "View", show=False),
         Binding("w", "toggle_whitespace", "Whitespace", show=False),
         Binding("ctrl+f", "page_down", "Page ↓", show=False),
         Binding("ctrl+b", "page_up", "Page ↑", show=False),
@@ -208,17 +209,19 @@ class DiffApp(App):
         initial_cache: dict[str, str] | None = None,
         *,
         ignore_whitespace: bool = False,
+        side_by_side: bool = False,
     ) -> None:
         super().__init__()
         self.groups = groups
         self._indices: dict[str, int] = {g: 0 for g in _GROUPS}
-        self._cache: dict[tuple[str, bool], str] = {
-            (path, False): raw for path, raw in (initial_cache or {}).items()
+        self._cache: dict[tuple[str, bool, bool], str] = {
+            (path, False, False): raw for path, raw in (initial_cache or {}).items()
         }
         self._active_group: str = next(
             (g for g in _GROUPS if groups.get(g)), GROUP_MODIFIED
         )
         self._ignore_whitespace = ignore_whitespace
+        self._side_by_side = side_by_side
 
     def compose(self) -> ComposeResult:
         yield Tabs(
@@ -260,7 +263,7 @@ class DiffApp(App):
 
         idx = self._indices[self._active_group]
         entry = files[idx]
-        cache_key = (entry.depot_path, self._ignore_whitespace)
+        cache_key = (entry.depot_path, self._ignore_whitespace, self._side_by_side)
 
         if cache_key not in self._cache:
             self._cache[cache_key] = _fetch_diff(entry, ignore_whitespace=self._ignore_whitespace)
@@ -276,11 +279,19 @@ class DiffApp(App):
             t.append(f" -{removed}", style=f"bold {theme.DIFF_DEL}")
         whitespace = "ignored" if self._ignore_whitespace else "significant"
         t.append(f"  whitespace: {whitespace}", style="dim")
+        t.append(
+            f"  view: {'side-by-side' if self._side_by_side else 'unified'}",
+            style="dim",
+        )
         header.update(t)
 
         log.clear()
-        for text, style in diff_lines:
-            log.write(Text(text, style=style) if style else text)
+        if self._side_by_side:
+            for line in render_side_by_side(raw_diff, ignore_whitespace=self._ignore_whitespace):
+                log.write(line)
+        else:
+            for text, style in diff_lines:
+                log.write(Text(text, style=style) if style else text)
 
     def _update_file_list(self, files: list[FileEntry]) -> None:
         idx = self._indices[self._active_group]
@@ -331,6 +342,10 @@ class DiffApp(App):
 
     def action_toggle_whitespace(self) -> None:
         self._ignore_whitespace = not self._ignore_whitespace
+        self._refresh_view()
+
+    def action_toggle_side_by_side(self) -> None:
+        self._side_by_side = not self._side_by_side
         self._refresh_view()
 
 
@@ -400,16 +415,35 @@ def _load_opened_records(p4_path: str | None, files: tuple[str, ...], cl: str | 
         raise
 
 
-def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None, *, ignore_whitespace: bool) -> None:
-    if ignore_whitespace:
+def _run_cli_diff(
+    p4_path: str | None,
+    files: tuple[str, ...],
+    cl: str | None,
+    *,
+    ignore_whitespace: bool,
+    side_by_side: bool,
+) -> None:
+    if ignore_whitespace or side_by_side:
         opened = _load_opened_records(p4_path, files, cl)
         if not opened:
             Console().print("[dim]no files open[/dim]")
             return
-        rendered = join_rendered_diffs(
-            _fetch_diff(entry, ignore_whitespace=True)
-            for entry in _build_entries(opened)
-        )
+        if side_by_side:
+            rendered_parts: list[str] = []
+            for entry in _build_entries(opened):
+                raw = _fetch_diff(entry, ignore_whitespace=ignore_whitespace)
+                if raw == "(no differences)":
+                    continue
+                rendered_parts.append(
+                    "\n".join(render_side_by_side(raw, ignore_whitespace=ignore_whitespace))
+                )
+            rendered = "\n\n".join(rendered_parts)
+            rendered = rendered + ("\n" if rendered else "")
+        else:
+            rendered = join_rendered_diffs(
+                _fetch_diff(entry, ignore_whitespace=True)
+                for entry in _build_entries(opened)
+            )
         if not rendered:
             _print_no_differences()
             return
@@ -474,6 +508,8 @@ def _run_cli_diff(p4_path: str | None, files: tuple[str, ...], cl: str | None, *
               help="Diff all opened files across the entire depot")
 @click.option("-w", "--ignore-whitespace", is_flag=True,
               help="Ignore whitespace-only changes when diffing")
+@click.option("--side-by-side", is_flag=True,
+              help="Render diffs in side-by-side view")
 @click.option("--dummy-data", is_flag=True,
               help="Display sample output instead of querying Perforce")
 def diff_cmd(
@@ -481,12 +517,13 @@ def diff_cmd(
     cl: str | None,
     show_all: bool,
     ignore_whitespace: bool,
+    side_by_side: bool,
     dummy_data: bool,
 ) -> None:
     """Browse diffs of opened files in an interactive TUI."""
     _dbg(
         f"invoked: files={files!r} cl={cl!r} show_all={show_all!r} "
-        f"ignore_whitespace={ignore_whitespace!r}"
+        f"ignore_whitespace={ignore_whitespace!r} side_by_side={side_by_side!r}"
     )
 
     if dummy_data:
@@ -494,6 +531,7 @@ def diff_cmd(
             build_diff_groups(),
             initial_cache=build_diff_cache(),
             ignore_whitespace=ignore_whitespace,
+            side_by_side=side_by_side,
         ).run()
         return
 
@@ -511,7 +549,13 @@ def diff_cmd(
     _dbg(f"p4_path={p4_path!r}")
 
     if not sys.stdout.isatty():
-        _run_cli_diff(p4_path, files, cl, ignore_whitespace=ignore_whitespace)
+        _run_cli_diff(
+            p4_path,
+            files,
+            cl,
+            ignore_whitespace=ignore_whitespace,
+            side_by_side=side_by_side,
+        )
         return
 
     opened = _load_opened_records(p4_path, files, cl)
@@ -533,4 +577,8 @@ def diff_cmd(
         f"D={len(groups[GROUP_DELETED])}"
     )
 
-    DiffApp(groups, ignore_whitespace=ignore_whitespace).run()
+    DiffApp(
+        groups,
+        ignore_whitespace=ignore_whitespace,
+        side_by_side=side_by_side,
+    ).run()

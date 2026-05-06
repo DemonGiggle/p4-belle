@@ -127,5 +127,31 @@ async def test_w_toggles_whitespace_mode_for_submit_diff():
             await pilot.pause()
 
             assert app._ignore_whitespace is True
-            assert True in app._detail_rec.diff_cache
+            assert (True, False) in app._detail_rec.diff_cache
             assert "whitespace:ignored" in app.query_one("#footer-bar").content
+
+
+@pytest.mark.asyncio
+async def test_b_toggles_side_by_side_mode_for_submit_diff():
+    """Pressing b in submit diff view should toggle side-by-side rendering state."""
+    app = _build_app()
+
+    with patch(
+        "p5.tui.submit_app._fetch_file_diff",
+        return_value="--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-value = 1\n+value = 2\n",
+    ):
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.press("space")
+            await pilot.pause()
+            assert "view:unified" in app.query_one("#footer-bar").content
+
+            await pilot.press("b")
+            await pilot.pause()
+
+            assert app._side_by_side is True
+            assert (False, True) in app._detail_rec.diff_cache
+            assert "view:side-by-side" in app.query_one("#footer-bar").content

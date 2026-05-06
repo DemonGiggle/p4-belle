@@ -39,7 +39,7 @@ class FileRecord:
         self.file_type = file_type
         self.diff = ""
         self.diff_loaded = False
-        self.diff_cache: dict[bool, str] = {}
+        self.diff_cache: dict[tuple[bool, bool], str] = {}
 
 
 class PendingCL:
@@ -454,6 +454,7 @@ class SubmitApp(App):
         Binding("enter",  "select_item", "Select",      show=False),
         Binding("escape", "go_back",     "Back"),
         Binding("space",  "view_diff",   "Diff",        show=False),
+        Binding("b",      "toggle_side_by_side", "View", show=False),
         Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("m",      "move_file",   "Move"),
         Binding("r",      "revert_file", "Revert"),
@@ -478,6 +479,7 @@ class SubmitApp(App):
         self._filter_just_committed: bool = False
         self._detail_open: bool = False
         self._ignore_whitespace: bool = False
+        self._side_by_side: bool = False
         self._detail_rec: FileRecord | None = None
 
     def compose(self) -> ComposeResult:
@@ -504,12 +506,14 @@ class SubmitApp(App):
             if self._detail_open:
                 fb.update(
                     f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                    f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
                     "[dim]Esc[/dim] back  [dim]q[/dim] quit"
                 )
             else:
                 fb.update(
                     "[dim]space[/dim] diff  "
                     f"[dim]w[/dim] whitespace:{whitespace}  "
+                    f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
                     "[dim]m[/dim] move  [dim]r[/dim] revert  "
                     "[dim]u[/dim] revert unchanged  [dim]e[/dim] edit desc  "
                     "[dim]s[/dim] submit  [dim]Esc[/dim] back  [dim]q[/dim] quit"
@@ -947,6 +951,12 @@ class SubmitApp(App):
         if self._detail_open and self._detail_rec is not None:
             self._refresh_detail(self._detail_rec)
 
+    def action_toggle_side_by_side(self) -> None:
+        self._side_by_side = not self._side_by_side
+        self._update_footer()
+        if self._detail_open and self._detail_rec is not None:
+            self._refresh_detail(self._detail_rec)
+
     def _open_detail(self, rec: FileRecord) -> None:
         lv = self.query_one("#main-list", ListView)
         dv = self.query_one("#detail-view", FileDiffView)
@@ -966,10 +976,15 @@ class SubmitApp(App):
 
     def _refresh_detail(self, rec: FileRecord) -> None:
         dv = self.query_one("#detail-view", FileDiffView)
-        if self._ignore_whitespace in rec.diff_cache:
-            rec.diff = rec.diff_cache[self._ignore_whitespace]
+        cache_key = (self._ignore_whitespace, self._side_by_side)
+        if cache_key in rec.diff_cache:
+            rec.diff = rec.diff_cache[cache_key]
             rec.diff_loaded = True
-            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
+            dv.update_content(
+                rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
             return
         dv.show_loading()
         self._load_detail(rec)
@@ -980,10 +995,15 @@ class SubmitApp(App):
             rec.diff = "(diff unavailable)"
         else:
             rec.diff = _fetch_file_diff(rec, ignore_whitespace=self._ignore_whitespace)
-        rec.diff_cache[self._ignore_whitespace] = rec.diff
+        rec.diff_cache[(self._ignore_whitespace, self._side_by_side)] = rec.diff
         rec.diff_loaded = True
         dv = self.query_one("#detail-view", FileDiffView)
-        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
+        self.call_from_thread(
+            dv.update_content,
+            rec,
+            ignore_whitespace=self._ignore_whitespace,
+            side_by_side=self._side_by_side,
+        )
 
     def _move_demo_file(self, item: FileRecord) -> None:
         if not self._current_cl:

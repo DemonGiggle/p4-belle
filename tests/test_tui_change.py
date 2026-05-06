@@ -637,8 +637,42 @@ async def test_w_toggles_whitespace_mode_for_change_diff():
             await pilot.pause()
 
             assert app._ignore_whitespace is True
-            assert True in app._detail_rec.diff_cache
+            assert (True, False) in app._detail_rec.diff_cache
             assert "whitespace:ignored" in app.query_one("#footer-bar").content
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_b_toggles_side_by_side_mode_for_change_diff():
+    """Pressing b in diff view should toggle side-by-side rendering state."""
+    from p5.tui.change_app import ChangeApp
+
+    patches = _make_patches()
+    patches.append(
+        patch(
+            "p5.tui.change_app._fetch_file_diff",
+            return_value="--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-value = 1\n+value = 2\n",
+        )
+    )
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("space")
+            await pilot.pause()
+            assert "view:unified" in app.query_one("#footer-bar").content
+
+            await pilot.press("b")
+            await pilot.pause()
+
+            assert app._side_by_side is True
+            assert (False, True) in app._detail_rec.diff_cache
+            assert "view:side-by-side" in app.query_one("#footer-bar").content
     finally:
         for p in patches:
             p.stop()

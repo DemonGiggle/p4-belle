@@ -17,7 +17,7 @@ from textual.widgets import Input, ListItem, ListView, Static
 from p5 import theme as T
 from p5.diff_utils import make_unified_diff
 from p5.p4 import P4Error, run_p4, run_p4_tagged
-from p5.tui.changes_app import _colorize_diff
+from p5.tui.changes_app import _render_diff_lines
 from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel, get_workspace
 
@@ -51,7 +51,7 @@ class FileRecord:
         self.file_type = file_type
         self.diff = ""
         self.diff_loaded = False
-        self.diff_cache: dict[bool, str] = {}
+        self.diff_cache: dict[tuple[bool, bool], str] = {}
 
 
 def _esc(text: str) -> str:
@@ -96,24 +96,35 @@ class FileDiffView(FastScrollableContainer):
     }
     """
 
-    def update_content(self, rec: FileRecord, *, ignore_whitespace: bool) -> None:
+    def update_content(
+        self,
+        rec: FileRecord,
+        *,
+        ignore_whitespace: bool,
+        side_by_side: bool,
+    ) -> None:
         self.remove_children()
 
         letter = T.STATE_LETTER.get(rec.action, rec.action[0].upper())
         color = T.ACTION_COLOR.get(rec.action, "white")
         whitespace = "ignored" if ignore_whitespace else "significant"
+        view_mode = "side-by-side" if side_by_side else "unified"
         widgets: list[Widget] = [
             Static(
                 f"[bold white]{_esc(rec.rel_path)}[/bold white]  "
                 f"[{color}]{letter}[/{color}]  [dim]{_esc(rec.action)}[/dim]",
                 markup=True,
             ),
-            Static(f"[dim]Whitespace: {whitespace}[/dim]", markup=True),
+            Static(f"[dim]Whitespace: {whitespace}  View: {view_mode}[/dim]", markup=True),
             Static(""),
         ]
 
         if rec.diff:
-            for line in _colorize_diff(rec.diff, ignore_whitespace=ignore_whitespace):
+            for line in _render_diff_lines(
+                rec.diff,
+                ignore_whitespace=ignore_whitespace,
+                side_by_side=side_by_side,
+            ):
                 widgets.append(Static(line, markup=True))
         else:
             widgets.append(Static("[dim](diff unavailable)[/dim]", markup=True))
@@ -464,6 +475,7 @@ class ChangeApp(App):
         Binding("j,down", "cursor_down",  "Down",       show=False),
         Binding("k,up",   "cursor_up",    "Up",         show=False),
         Binding("space",  "view_diff",    "Diff"),
+        Binding("b",      "toggle_side_by_side", "View", show=False),
         Binding("w",      "toggle_whitespace", "Whitespace", show=False),
         Binding("a",      "select_all",   "Select All"),
         Binding("n",      "new_cl",       "New CL"),
@@ -495,6 +507,7 @@ class ChangeApp(App):
         self._filter_just_committed: bool = False
         self._detail_open: bool = False
         self._ignore_whitespace: bool = False
+        self._side_by_side: bool = False
         self._detail_rec: FileRecord | None = None
 
     def compose(self) -> ComposeResult:
@@ -519,12 +532,14 @@ class ChangeApp(App):
         if self._detail_open:
             fb.update(
                 f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
                 "[dim]Esc[/dim] back  [dim]q[/dim] quit"
             )
             return
         fb.update(
             "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  "
             f"[dim]w[/dim] whitespace:{whitespace}  [dim]a[/dim] all  "
+            f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
             "[dim]n[/dim] new CL  [dim]m[/dim] move  [dim]r[/dim] revert  "
             "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit"
         )
@@ -832,12 +847,23 @@ class ChangeApp(App):
         if self._detail_open and self._detail_rec is not None:
             self._refresh_detail(self._detail_rec)
 
+    def action_toggle_side_by_side(self) -> None:
+        self._side_by_side = not self._side_by_side
+        self._update_footer()
+        if self._detail_open and self._detail_rec is not None:
+            self._refresh_detail(self._detail_rec)
+
     def _refresh_detail(self, rec: FileRecord) -> None:
         dv = self.query_one("#detail-view", FileDiffView)
-        if self._ignore_whitespace in rec.diff_cache:
-            rec.diff = rec.diff_cache[self._ignore_whitespace]
+        cache_key = (self._ignore_whitespace, self._side_by_side)
+        if cache_key in rec.diff_cache:
+            rec.diff = rec.diff_cache[cache_key]
             rec.diff_loaded = True
-            dv.update_content(rec, ignore_whitespace=self._ignore_whitespace)
+            dv.update_content(
+                rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
             return
         dv.show_loading()
         self._load_detail(rec)
@@ -848,10 +874,15 @@ class ChangeApp(App):
             rec.diff = self._demo_diffs.get(rec.depot_file, "(diff unavailable)")
         else:
             rec.diff = _fetch_file_diff(rec, ignore_whitespace=self._ignore_whitespace)
-        rec.diff_cache[self._ignore_whitespace] = rec.diff
+        rec.diff_cache[(self._ignore_whitespace, self._side_by_side)] = rec.diff
         rec.diff_loaded = True
         dv = self.query_one("#detail-view", FileDiffView)
-        self.call_from_thread(dv.update_content, rec, ignore_whitespace=self._ignore_whitespace)
+        self.call_from_thread(
+            dv.update_content,
+            rec,
+            ignore_whitespace=self._ignore_whitespace,
+            side_by_side=self._side_by_side,
+        )
 
     # ── filter mode ───────────────────────────────────────────────────────
 

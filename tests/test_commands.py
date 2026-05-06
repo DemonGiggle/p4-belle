@@ -480,6 +480,30 @@ class TestDiffCmd:
         assert result.exit_code == 0
         assert "no differences" in result.output
 
+    def test_side_by_side_renders_two_columns(self):
+        """--side-by-side should render paired left/right columns in non-interactive mode."""
+        with patch("p5.commands.diff.Path.read_text", return_value="value = 2\n"):
+            result = self._invoke(
+                args=["--side-by-side"],
+                tagged_results={
+                    "opened": [
+                        {
+                            "depotFile": "//depot/myproject/src/main.cpp",
+                            "clientFile": f"//{FAKE_CLIENT}/src/main.cpp",
+                            "action": "edit",
+                            "type": "text",
+                        }
+                    ],
+                },
+                raw_results={
+                    "print -q //depot/myproject/src/main.cpp#have": "value = 1\n",
+                },
+            )
+        assert result.exit_code == 0
+        assert "│" in result.output
+        assert "value = 1" in result.output
+        assert "value = 2" in result.output
+
 
 # ── p5 sync ──────────────────────────────────────────────────────────────────
 
