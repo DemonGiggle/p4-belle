@@ -104,3 +104,17 @@ def test_render_diff_lines_supports_side_by_side():
     )
 
     assert any("│" in line for line in rendered)
+
+
+def test_render_diff_lines_keeps_diff_colors_in_side_by_side():
+    """Side-by-side rendering should keep add/delete color markup."""
+    from p5 import theme as T
+    from p5.tui.changes_app import _render_diff_lines
+
+    rendered = _render_diff_lines(
+        "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-value = 1\n+value = 2\n",
+        side_by_side=True,
+    )
+
+    assert any(T.DIFF_DEL_BG in line for line in rendered)
+    assert any(T.DIFF_ADD_BG in line for line in rendered)

@@ -14,7 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
-from p5.diff_utils import filter_unified_diff, render_side_by_side
+from p5.diff_utils import build_side_by_side_lines, filter_unified_diff
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel
@@ -306,8 +306,42 @@ def _esc(s: str) -> str:
 
 def _render_diff_lines(raw: str, *, ignore_whitespace: bool = False, side_by_side: bool = False) -> list[str]:
     if side_by_side:
-        rendered = render_side_by_side(raw, ignore_whitespace=ignore_whitespace)
-        return [f"[white]{_esc(line)}[/white]" for line in rendered]
+        rendered: list[str] = []
+        for line in build_side_by_side_lines(raw, ignore_whitespace=ignore_whitespace):
+            if line.kind == "file":
+                rendered.append(f"[bold white]{_esc(line.text)}[/bold white]")
+                continue
+            if line.kind == "hunk":
+                if hm := _HUNK_RE.match(line.text):
+                    rendered.append(
+                        f"[bold {T.DIFF_HUNK}]{_esc(hm.group(1))}[/bold {T.DIFF_HUNK}]"
+                        f"[dim]{_esc(hm.group(2))}[/dim]"
+                    )
+                else:
+                    rendered.append(f"[bold {T.DIFF_HUNK}]{_esc(line.text)}[/bold {T.DIFF_HUNK}]")
+                continue
+            if line.kind == "message":
+                rendered.append(f"[dim]{_esc(line.text)}[/dim]")
+                continue
+
+            left = _esc(line.left_cell_text())
+            right = _esc(line.right_cell_text())
+            if line.left_kind == "remove":
+                left_markup = f"[{T.DIFF_DEL_BG}][{T.DIFF_DEL}]{left}[/{T.DIFF_DEL}][/{T.DIFF_DEL_BG}]"
+            elif line.left_kind == "context":
+                left_markup = f"[dim]{left}[/dim]"
+            else:
+                left_markup = left
+
+            if line.right_kind == "add":
+                right_markup = f"[{T.DIFF_ADD_BG}][{T.DIFF_ADD}]{right}[/{T.DIFF_ADD}][/{T.DIFF_ADD_BG}]"
+            elif line.right_kind == "context":
+                right_markup = f"[dim]{right}[/dim]"
+            else:
+                right_markup = right
+
+            rendered.append(f"{left_markup}[dim] │ [/dim]{right_markup}")
+        return rendered
     return _colorize_diff(raw, ignore_whitespace=ignore_whitespace)
 
 

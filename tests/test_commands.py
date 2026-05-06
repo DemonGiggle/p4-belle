@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
+from rich.text import Text
 
 from p5.p4 import P4Error
 
@@ -503,6 +504,19 @@ class TestDiffCmd:
         assert "│" in result.output
         assert "value = 1" in result.output
         assert "value = 2" in result.output
+
+    def test_side_by_side_tui_lines_keep_styles(self):
+        """The side-by-side TUI renderer should preserve diff styling."""
+        from p5.commands.diff import _style_side_by_side_diff
+
+        rendered = _style_side_by_side_diff(
+            "--- a/src/main.cpp\n+++ b/src/main.cpp\n@@ -1 +1 @@\n-old_line();\n+new_line();\n",
+            ignore_whitespace=False,
+        )
+
+        styled_rows = [line for line in rendered if isinstance(line, Text) and "│" in line.plain]
+        assert styled_rows
+        assert any(span.style for span in styled_rows[0].spans)
 
 
 # ── p5 sync ──────────────────────────────────────────────────────────────────

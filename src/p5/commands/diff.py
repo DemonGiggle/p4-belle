@@ -17,7 +17,7 @@ from textual.widgets import Footer, RichLog, Static, Tab, Tabs
 
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
-from p5.diff_utils import join_rendered_diffs, make_unified_diff, render_side_by_side
+from p5.diff_utils import build_side_by_side_lines, join_rendered_diffs, make_unified_diff, render_side_by_side
 from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastRichLog
@@ -92,6 +92,40 @@ def _style_unified_diff(raw: str) -> list[tuple[str, str]]:
         else:
             result.append((line, ""))
     return result or [("(no differences)", "dim")]
+
+
+def _style_side_by_side_diff(raw: str, *, ignore_whitespace: bool) -> list[Text | str]:
+    lines: list[Text | str] = []
+    for line in build_side_by_side_lines(raw, ignore_whitespace=ignore_whitespace):
+        if line.kind == "file":
+            lines.append(Text(line.text, style="bold"))
+            continue
+        if line.kind == "hunk":
+            m = _HUNK_RE.match(line.text)
+            styled = (m.group(1) + m.group(2)) if m else line.text
+            lines.append(Text(styled, style=f"bold {theme.DIFF_HUNK}"))
+            continue
+        if line.kind == "message":
+            lines.append(Text(line.text, style="dim"))
+            continue
+
+        left_style = (
+            f"{theme.DIFF_DEL} {theme.DIFF_DEL_BG}"
+            if line.left_kind == "remove"
+            else "dim" if line.left_kind == "context" else ""
+        )
+        right_style = (
+            f"{theme.DIFF_ADD} {theme.DIFF_ADD_BG}"
+            if line.right_kind == "add"
+            else "dim" if line.right_kind == "context" else ""
+        )
+
+        rendered = Text()
+        rendered.append(line.left_cell_text(), style=left_style)
+        rendered.append(" │ ", style="dim")
+        rendered.append(line.right_cell_text(), style=right_style)
+        lines.append(rendered)
+    return lines
 
 
 def _fetch_diff(entry: FileEntry, *, ignore_whitespace: bool = False) -> str:
@@ -287,7 +321,7 @@ class DiffApp(App):
 
         log.clear()
         if self._side_by_side:
-            for line in render_side_by_side(raw_diff, ignore_whitespace=self._ignore_whitespace):
+            for line in _style_side_by_side_diff(raw_diff, ignore_whitespace=self._ignore_whitespace):
                 log.write(line)
         else:
             for text, style in diff_lines:

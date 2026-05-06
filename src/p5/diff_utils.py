@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from dataclasses import dataclass
 from typing import Iterable
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
@@ -192,18 +193,48 @@ def _format_side_by_side_row(left_prefix: str, left: str, right_prefix: str, rig
     return f"{left_prefix} {_fit_side(left, width)} │ {right_prefix} {_fit_side(right, width)}"
 
 
-def render_side_by_side(
+@dataclass(frozen=True)
+class SideBySideLine:
+    kind: str
+    text: str = ""
+    left_prefix: str = ""
+    left_text: str = ""
+    left_kind: str = "context"
+    right_prefix: str = ""
+    right_text: str = ""
+    right_kind: str = "context"
+    width: int = 56
+
+    def plain_text(self) -> str:
+        if self.kind != "row":
+            return self.text
+        return _format_side_by_side_row(
+            self.left_prefix,
+            self.left_text,
+            self.right_prefix,
+            self.right_text,
+            self.width,
+        )
+
+    def left_cell_text(self) -> str:
+        return f"{self.left_prefix} {_fit_side(self.left_text, self.width)}"
+
+    def right_cell_text(self) -> str:
+        return f"{self.right_prefix} {_fit_side(self.right_text, self.width)}"
+
+
+def build_side_by_side_lines(
     raw: str,
     *,
     ignore_whitespace: bool = False,
     column_width: int = 56,
-) -> list[str]:
+) -> list[SideBySideLine]:
     raw = filter_unified_diff(raw, ignore_whitespace=ignore_whitespace)
     if not raw.strip():
-        return ["(no differences)"]
+        return [SideBySideLine(kind="message", text="(no differences)")]
 
     lines = raw.splitlines()
-    out: list[str] = []
+    out: list[SideBySideLine] = []
     idx = 0
     pending_p4_header: str | None = None
 
@@ -219,7 +250,7 @@ def render_side_by_side(
             continue
 
         if line.startswith("diff "):
-            out.append(line)
+            out.append(SideBySideLine(kind="file", text=line))
             idx += 1
             continue
 
@@ -230,12 +261,17 @@ def render_side_by_side(
             if idx < len(lines) and lines[idx].startswith("+++ "):
                 tofile = lines[idx][4:]
                 idx += 1
-            out.append(f"diff {pending_p4_header or _display_path(fromfile, tofile)}")
+            out.append(
+                SideBySideLine(
+                    kind="file",
+                    text=f"diff {pending_p4_header or _display_path(fromfile, tofile)}",
+                )
+            )
             pending_p4_header = None
             continue
 
         if line.startswith("@@"):
-            out.append(line)
+            out.append(SideBySideLine(kind="hunk", text=line))
             idx += 1
             hunk_lines: list[str] = []
             while idx < len(lines) and not lines[idx].startswith(("@@", "==== ", "diff ", "--- ")):
@@ -247,7 +283,18 @@ def render_side_by_side(
                 current = hunk_lines[cursor]
                 if current.startswith(" "):
                     text = current[1:]
-                    out.append(_format_side_by_side_row(" ", text, " ", text, column_width))
+                    out.append(
+                        SideBySideLine(
+                            kind="row",
+                            left_prefix=" ",
+                            left_text=text,
+                            left_kind="context",
+                            right_prefix=" ",
+                            right_text=text,
+                            right_kind="context",
+                            width=column_width,
+                        )
+                    )
                     cursor += 1
                     continue
 
@@ -261,11 +308,18 @@ def render_side_by_side(
                         added.append(hunk_lines[cursor][1:])
                         cursor += 1
                     for row in range(max(len(removed), len(added))):
-                        left = removed[row] if row < len(removed) else ""
-                        right = added[row] if row < len(added) else ""
-                        left_prefix = "-" if row < len(removed) else " "
-                        right_prefix = "+" if row < len(added) else " "
-                        out.append(_format_side_by_side_row(left_prefix, left, right_prefix, right, column_width))
+                        out.append(
+                            SideBySideLine(
+                                kind="row",
+                                left_prefix="-" if row < len(removed) else " ",
+                                left_text=removed[row] if row < len(removed) else "",
+                                left_kind="remove" if row < len(removed) else "empty",
+                                right_prefix="+" if row < len(added) else " ",
+                                right_text=added[row] if row < len(added) else "",
+                                right_kind="add" if row < len(added) else "empty",
+                                width=column_width,
+                            )
+                        )
                     continue
 
                 if current.startswith("+"):
@@ -274,14 +328,41 @@ def render_side_by_side(
                         added.append(hunk_lines[cursor][1:])
                         cursor += 1
                     for text in added:
-                        out.append(_format_side_by_side_row(" ", "", "+", text, column_width))
+                        out.append(
+                            SideBySideLine(
+                                kind="row",
+                                left_prefix=" ",
+                                left_text="",
+                                left_kind="empty",
+                                right_prefix="+",
+                                right_text=text,
+                                right_kind="add",
+                                width=column_width,
+                            )
+                        )
                     continue
 
                 cursor += 1
             continue
 
         pending_p4_header = None
-        out.append(line)
+        out.append(SideBySideLine(kind="message", text=line))
         idx += 1
 
     return out
+
+
+def render_side_by_side(
+    raw: str,
+    *,
+    ignore_whitespace: bool = False,
+    column_width: int = 56,
+) -> list[str]:
+    return [
+        line.plain_text()
+        for line in build_side_by_side_lines(
+            raw,
+            ignore_whitespace=ignore_whitespace,
+            column_width=column_width,
+        )
+    ]
