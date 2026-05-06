@@ -17,7 +17,14 @@ from textual.widgets import Footer, RichLog, Static, Tab, Tabs
 
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
-from p5.diff_utils import build_side_by_side_lines, join_rendered_diffs, make_unified_diff, render_side_by_side
+from p5.diff_utils import (
+    DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
+    build_side_by_side_lines,
+    join_rendered_diffs,
+    make_unified_diff,
+    render_side_by_side,
+    side_by_side_column_width,
+)
 from p5.dummy_data import build_diff_cache, build_diff_groups
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastRichLog
@@ -94,9 +101,18 @@ def _style_unified_diff(raw: str) -> list[tuple[str, str]]:
     return result or [("(no differences)", "dim")]
 
 
-def _style_side_by_side_diff(raw: str, *, ignore_whitespace: bool) -> list[Text | str]:
+def _style_side_by_side_diff(
+    raw: str,
+    *,
+    ignore_whitespace: bool,
+    column_width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
+) -> list[Text | str]:
     lines: list[Text | str] = []
-    for line in build_side_by_side_lines(raw, ignore_whitespace=ignore_whitespace):
+    for line in build_side_by_side_lines(
+        raw,
+        ignore_whitespace=ignore_whitespace,
+        column_width=column_width,
+    ):
         if line.kind == "file":
             lines.append(Text(line.text, style="bold"))
             continue
@@ -321,11 +337,21 @@ class DiffApp(App):
 
         log.clear()
         if self._side_by_side:
-            for line in _style_side_by_side_diff(raw_diff, ignore_whitespace=self._ignore_whitespace):
+            total_width = log.scrollable_content_region.width or log.size.width
+            column_width = side_by_side_column_width(total_width)
+            for line in _style_side_by_side_diff(
+                raw_diff,
+                ignore_whitespace=self._ignore_whitespace,
+                column_width=column_width,
+            ):
                 log.write(line)
         else:
             for text, style in diff_lines:
                 log.write(Text(text, style=style) if style else text)
+
+    def on_resize(self) -> None:
+        if self._side_by_side and self.is_mounted:
+            self._refresh_view()
 
     def _update_file_list(self, files: list[FileEntry]) -> None:
         idx = self._indices[self._active_group]
@@ -463,13 +489,20 @@ def _run_cli_diff(
             Console().print("[dim]no files open[/dim]")
             return
         if side_by_side:
+            column_width = side_by_side_column_width(Console().width)
             rendered_parts: list[str] = []
             for entry in _build_entries(opened):
                 raw = _fetch_diff(entry, ignore_whitespace=ignore_whitespace)
                 if raw == "(no differences)":
                     continue
                 rendered_parts.append(
-                    "\n".join(render_side_by_side(raw, ignore_whitespace=ignore_whitespace))
+                    "\n".join(
+                        render_side_by_side(
+                            raw,
+                            ignore_whitespace=ignore_whitespace,
+                            column_width=column_width,
+                        )
+                    )
                 )
             rendered = "\n\n".join(rendered_parts)
             rendered = rendered + ("\n" if rendered else "")

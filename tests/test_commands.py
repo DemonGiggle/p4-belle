@@ -1,7 +1,7 @@
 """Tests for CLI commands — mock p4 output, verify p5 behaviour."""
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -517,6 +517,35 @@ class TestDiffCmd:
         styled_rows = [line for line in rendered if isinstance(line, Text) and "│" in line.plain]
         assert styled_rows
         assert any(span.style for span in styled_rows[0].spans)
+
+    def test_side_by_side_uses_console_width(self):
+        """--side-by-side should size columns from the available terminal width."""
+        before_line = "left side " * 8
+        after_line = "right side " * 8
+        with (
+            patch("p5.commands.diff.Path.read_text", return_value=f"{after_line}\n"),
+            patch("p5.commands.diff.Console.width", new_callable=PropertyMock, return_value=200),
+        ):
+            result = self._invoke(
+                args=["--side-by-side"],
+                tagged_results={
+                    "opened": [
+                        {
+                            "depotFile": "//depot/myproject/src/main.cpp",
+                            "clientFile": f"//{FAKE_CLIENT}/src/main.cpp",
+                            "action": "edit",
+                            "type": "text",
+                        }
+                    ],
+                },
+                raw_results={
+                    "print -q //depot/myproject/src/main.cpp#have": f"{before_line}\n",
+                },
+            )
+        assert result.exit_code == 0
+        assert before_line in result.output
+        assert after_line in result.output
+        assert "…" not in result.output
 
 
 # ── p5 sync ──────────────────────────────────────────────────────────────────

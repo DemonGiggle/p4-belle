@@ -9,6 +9,9 @@ from typing import Iterable
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 _SKIP_METADATA_RE = re.compile(r"^(Change|Date|User|Client|Description|Files|Affected|Differences).*:")
 _P4_HEADER_RE = re.compile(r"^====\s+(.+?)(?:#\d+)?(?:\s+\(.+\))?\s+====$")
+_SIDE_BY_SIDE_SEPARATOR = " │ "
+_SIDE_BY_SIDE_FIXED_WIDTH = 7
+DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH = 56
 
 
 def _normalize_whitespace(text: str) -> str:
@@ -185,12 +188,20 @@ def _display_path(fromfile: str, tofile: str) -> str:
 def _fit_side(text: str, width: int) -> str:
     text = text.expandtabs(4)
     if len(text) > width:
-        return text[: max(1, width - 1)] + "…"
+        if width <= 1:
+            return "…"
+        return text[: width - 1] + "…"
     return text.ljust(width)
 
 
 def _format_side_by_side_row(left_prefix: str, left: str, right_prefix: str, right: str, width: int) -> str:
-    return f"{left_prefix} {_fit_side(left, width)} │ {right_prefix} {_fit_side(right, width)}"
+    return f"{left_prefix} {_fit_side(left, width)}{_SIDE_BY_SIDE_SEPARATOR}{right_prefix} {_fit_side(right, width)}"
+
+
+def side_by_side_column_width(total_width: int | None) -> int:
+    if total_width is None or total_width <= 0:
+        return DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH
+    return max(1, (total_width - _SIDE_BY_SIDE_FIXED_WIDTH) // 2)
 
 
 @dataclass(frozen=True)
@@ -203,7 +214,7 @@ class SideBySideLine:
     right_prefix: str = ""
     right_text: str = ""
     right_kind: str = "context"
-    width: int = 56
+    width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH
 
     def plain_text(self) -> str:
         if self.kind != "row":
@@ -227,7 +238,7 @@ def build_side_by_side_lines(
     raw: str,
     *,
     ignore_whitespace: bool = False,
-    column_width: int = 56,
+    column_width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
 ) -> list[SideBySideLine]:
     raw = filter_unified_diff(raw, ignore_whitespace=ignore_whitespace)
     if not raw.strip():
@@ -356,7 +367,7 @@ def render_side_by_side(
     raw: str,
     *,
     ignore_whitespace: bool = False,
-    column_width: int = 56,
+    column_width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
 ) -> list[str]:
     return [
         line.plain_text()

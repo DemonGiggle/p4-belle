@@ -118,3 +118,20 @@ def test_render_diff_lines_keeps_diff_colors_in_side_by_side():
 
     assert any(T.DIFF_DEL_BG in line for line in rendered)
     assert any(T.DIFF_ADD_BG in line for line in rendered)
+
+
+def test_render_diff_lines_uses_provided_column_width():
+    """Side-by-side rendering should expand columns when more width is available."""
+    from p5.tui.changes_app import _render_diff_lines
+
+    before_line = "left side " * 8
+    after_line = "right side " * 8
+    rendered = _render_diff_lines(
+        f"--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-{before_line}\n+{after_line}\n",
+        side_by_side=True,
+        column_width=90,
+    )
+
+    assert any(before_line in line for line in rendered)
+    assert any(after_line in line for line in rendered)
+    assert not any("…" in line for line in rendered)

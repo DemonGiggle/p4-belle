@@ -15,7 +15,11 @@ from textual.widget import Widget
 from textual.widgets import Input, ListItem, ListView, Static
 
 from p5 import theme as T
-from p5.diff_utils import make_unified_diff
+from p5.diff_utils import (
+    DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
+    make_unified_diff,
+    side_by_side_column_width,
+)
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.changes_app import _render_diff_lines
 from p5.tui.widgets import FastListView, FastScrollableContainer
@@ -109,6 +113,11 @@ class FileDiffView(FastScrollableContainer):
         color = T.ACTION_COLOR.get(rec.action, "white")
         whitespace = "ignored" if ignore_whitespace else "significant"
         view_mode = "side-by-side" if side_by_side else "unified"
+        column_width = (
+            side_by_side_column_width(self.scrollable_content_region.width or self.size.width)
+            if side_by_side
+            else DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH
+        )
         widgets: list[Widget] = [
             Static(
                 f"[bold white]{_esc(rec.rel_path)}[/bold white]  "
@@ -124,6 +133,7 @@ class FileDiffView(FastScrollableContainer):
                 rec.diff,
                 ignore_whitespace=ignore_whitespace,
                 side_by_side=side_by_side,
+                column_width=column_width,
             ):
                 widgets.append(Static(line, markup=True))
         else:
@@ -851,6 +861,15 @@ class ChangeApp(App):
         self._side_by_side = not self._side_by_side
         self._update_footer()
         if self._detail_open and self._detail_rec is not None:
+            self._refresh_detail(self._detail_rec)
+
+    def on_resize(self) -> None:
+        if (
+            self._side_by_side
+            and self._detail_open
+            and self._detail_rec is not None
+            and self._detail_rec.diff_loaded
+        ):
             self._refresh_detail(self._detail_rec)
 
     def _refresh_detail(self, rec: FileRecord) -> None:

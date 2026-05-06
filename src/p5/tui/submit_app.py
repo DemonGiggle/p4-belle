@@ -957,6 +957,15 @@ class SubmitApp(App):
         if self._detail_open and self._detail_rec is not None:
             self._refresh_detail(self._detail_rec)
 
+    def on_resize(self) -> None:
+        if (
+            self._side_by_side
+            and self._detail_open
+            and self._detail_rec is not None
+            and self._detail_rec.diff_loaded
+        ):
+            self._refresh_detail(self._detail_rec)
+
     def _open_detail(self, rec: FileRecord) -> None:
         lv = self.query_one("#main-list", ListView)
         dv = self.query_one("#detail-view", FileDiffView)

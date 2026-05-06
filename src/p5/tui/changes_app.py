@@ -14,7 +14,12 @@ from textual.widget import Widget
 from textual.widgets import Footer, ListItem, ListView, Static
 
 from p5 import theme as T
-from p5.diff_utils import build_side_by_side_lines, filter_unified_diff
+from p5.diff_utils import (
+    DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
+    build_side_by_side_lines,
+    filter_unified_diff,
+    side_by_side_column_width,
+)
 from p5.p4 import P4Error, run_p4, run_p4_tagged
 from p5.tui.widgets import FastListView, FastScrollableContainer
 from p5.workspace import any_to_rel
@@ -141,6 +146,11 @@ class DiffView(FastScrollableContainer):
 
         whitespace = "ignored" if ignore_whitespace else "significant"
         view_mode = "side-by-side" if side_by_side else "unified"
+        column_width = (
+            side_by_side_column_width(self.scrollable_content_region.width or self.size.width)
+            if side_by_side
+            else DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH
+        )
         widgets: list[Widget] = []
         widgets.append(Static(
             f"[bold white]CL {rec.cl}[/bold white]  "
@@ -167,6 +177,7 @@ class DiffView(FastScrollableContainer):
                 rec.diff,
                 ignore_whitespace=ignore_whitespace,
                 side_by_side=side_by_side,
+                column_width=column_width,
             ):
                 widgets.append(Static(line, markup=True))
 
@@ -304,10 +315,20 @@ def _esc(s: str) -> str:
     return s.replace("[", "\\[").replace("]", "\\]")
 
 
-def _render_diff_lines(raw: str, *, ignore_whitespace: bool = False, side_by_side: bool = False) -> list[str]:
+def _render_diff_lines(
+    raw: str,
+    *,
+    ignore_whitespace: bool = False,
+    side_by_side: bool = False,
+    column_width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
+) -> list[str]:
     if side_by_side:
         rendered: list[str] = []
-        for line in build_side_by_side_lines(raw, ignore_whitespace=ignore_whitespace):
+        for line in build_side_by_side_lines(
+            raw,
+            ignore_whitespace=ignore_whitespace,
+            column_width=column_width,
+        ):
             if line.kind == "file":
                 rendered.append(f"[bold white]{_esc(line.text)}[/bold white]")
                 continue
@@ -537,6 +558,19 @@ class ChangesApp(App):
     def action_toggle_side_by_side(self) -> None:
         self._side_by_side = not self._side_by_side
         if self.detail_open and self._detail_rec is not None:
+            self.query_one("#detail-view", DiffView).update_content(
+                self._detail_rec,
+                ignore_whitespace=self._ignore_whitespace,
+                side_by_side=self._side_by_side,
+            )
+
+    def on_resize(self) -> None:
+        if (
+            self._side_by_side
+            and self.detail_open
+            and self._detail_rec is not None
+            and self._detail_rec.loaded
+        ):
             self.query_one("#detail-view", DiffView).update_content(
                 self._detail_rec,
                 ignore_whitespace=self._ignore_whitespace,
