@@ -769,3 +769,36 @@ async def test_empty_default_changelist():
     finally:
         for p in patches:
             p.stop()
+
+@pytest.mark.asyncio
+async def test_new_cl_screen_accepts_multiline_description_with_ctrl_s():
+    """New changelist dialog should keep Enter for newlines and save with Ctrl+S."""
+    from textual.app import App
+    from textual.widgets import TextArea
+
+    from p5.tui.change_app import FileRecord, NewCLScreen
+
+    screen = NewCLScreen([
+        FileRecord(f"{FAKE_PREFIX}/src/alpha.cpp", "edit", rel_path="src/alpha.cpp")
+    ])
+    captured: list[str] = []
+
+    def fake_create(desc: str) -> None:
+        captured.append(desc)
+
+    screen._create_cl = fake_create
+
+    class TestApp(App[None]):
+        pass
+
+    app = TestApp()
+    async with app.run_test(size=(120, 30)) as pilot:
+        app.push_screen(screen)
+        await pilot.pause()
+
+        editor = screen.query_one("#desc-editor", TextArea)
+        editor.text = "First line\nSecond line"
+        await pilot.press("ctrl+s")
+        await pilot.pause()
+
+    assert captured == ["First line\nSecond line"]

@@ -13,7 +13,7 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Input, ListItem, ListView, Static
+from textual.widgets import Input, ListItem, ListView, Static, TextArea
 
 from p5 import theme as T
 from p5.diff_utils import (
@@ -314,10 +314,10 @@ class NewCLScreen(ModalScreen[Optional[str]]):
     CSS = """
     NewCLScreen { align: center middle; }
     #new-cl-box {
-        width: 70; max-height: 80%; height: auto;
+        width: 80; max-height: 90%; height: 24;
         background: $surface; border: thick $primary; padding: 1 2;
     }
-    #desc-input { margin: 1 0; }
+    #desc-editor { height: 8; margin: 1 0; }
     #file-preview { max-height: 15; }
     """
 
@@ -331,13 +331,13 @@ class NewCLScreen(ModalScreen[Optional[str]]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="new-cl-box"):
-            yield Static("[bold]Create new changelist[/bold]", markup=True)
+            yield Static(
+                "[bold]Create new changelist[/bold]  [dim](Ctrl+S to create)[/dim]",
+                markup=True,
+            )
             yield Static("")
             yield Static("Description:")
-            yield Input(
-                placeholder="Enter changelist description\u2026",
-                id="desc-input",
-            )
+            yield TextArea("", id="desc-editor")
             yield Static("")
             yield Static("[bold]Files:[/bold]", markup=True)
             lines = []
@@ -348,25 +348,26 @@ class NewCLScreen(ModalScreen[Optional[str]]):
             yield Static("\n".join(lines), id="file-preview", markup=True)
             yield Static("")
             yield Static(
-                "[dim]Enter: create \u00b7 Esc: cancel[/dim]", markup=True
+                "[dim]Enter: newline · Ctrl+S: create · Esc: cancel[/dim]", markup=True
             )
 
     def on_mount(self) -> None:
-        self.query_one("#desc-input", Input).focus()
+        self.query_one("#desc-editor", TextArea).focus()
 
-    @on(Input.Submitted)
-    def on_submitted(self, event: Input.Submitted) -> None:
-        desc = event.value.strip()
-        if not desc:
-            self.notify("Description cannot be empty", severity="warning")
-            return
-        self._create_cl(desc)
+    def on_key(self, event) -> None:
+        if event.key == "ctrl+s":
+            desc = self.query_one("#desc-editor", TextArea).text.strip()
+            if not desc:
+                self.notify("Description cannot be empty", severity="warning")
+                return
+            self._create_cl(desc)
+            event.stop()
 
     @work(thread=True)
     def _create_cl(self, desc: str) -> None:
         try:
-            indented = "\n\t".join(desc.splitlines())
-            spec = f"Change: new\n\nDescription:\n\t{indented}\n"
+            indented = "\n	".join(desc.splitlines())
+            spec = f"Change: new\n\nDescription:\n	{indented}\n"
 
             result = subprocess.run(
                 ["p4", "change", "-i"],
