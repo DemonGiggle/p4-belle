@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import ClassVar
 
 from rich.markup import escape as markup_escape
+from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -180,7 +181,7 @@ class DiffView(FastScrollableContainer):
                 side_by_side=side_by_side,
                 column_width=column_width,
             ):
-                widgets.append(Static(line, markup=True))
+                widgets.append(Static(line))
 
         for w in widgets:
             self.mount(w)
@@ -322,49 +323,52 @@ def _render_diff_lines(
     ignore_whitespace: bool = False,
     side_by_side: bool = False,
     column_width: int = DEFAULT_SIDE_BY_SIDE_COLUMN_WIDTH,
-) -> list[str]:
+) -> list[Text]:
     if side_by_side:
-        rendered: list[str] = []
+        rendered: list[Text] = []
         for line in build_side_by_side_lines(
             raw,
             ignore_whitespace=ignore_whitespace,
             column_width=column_width,
         ):
             if line.kind == "file":
-                rendered.append(f"[bold white]{_esc(line.text)}[/bold white]")
+                rendered.append(Text(line.text, style="bold white"))
                 continue
             if line.kind == "hunk":
+                text_line = Text()
                 if hm := _HUNK_RE.match(line.text):
-                    rendered.append(
-                        f"[bold {T.DIFF_HUNK}]{_esc(hm.group(1))}[/bold {T.DIFF_HUNK}]"
-                        f"[dim]{_esc(hm.group(2))}[/dim]"
-                    )
+                    text_line.append(hm.group(1), style=f"bold {T.DIFF_HUNK}")
+                    text_line.append(hm.group(2), style="dim")
                 else:
-                    rendered.append(f"[bold {T.DIFF_HUNK}]{_esc(line.text)}[/bold {T.DIFF_HUNK}]")
+                    text_line.append(line.text, style=f"bold {T.DIFF_HUNK}")
+                rendered.append(text_line)
                 continue
             if line.kind == "message":
-                rendered.append(f"[dim]{_esc(line.text)}[/dim]")
+                rendered.append(Text(line.text, style="dim"))
                 continue
 
-            left = _esc(line.left_cell_text())
-            right = _esc(line.right_cell_text())
+            text_line = Text()
+            left = line.left_cell_text()
+            right = line.right_cell_text()
             if line.left_kind == "remove":
-                left_markup = f"[{T.DIFF_DEL_BG}][{T.DIFF_DEL}]{left}[/{T.DIFF_DEL}][/{T.DIFF_DEL_BG}]"
+                text_line.append(left, style=f"{T.DIFF_DEL} {T.DIFF_DEL_BG}")
             elif line.left_kind == "context":
-                left_markup = f"[dim]{left}[/dim]"
+                text_line.append(left, style="dim")
             else:
-                left_markup = left
+                text_line.append(left)
+
+            text_line.append(" │ ", style="dim")
 
             if line.right_kind == "add":
-                right_markup = f"[{T.DIFF_ADD_BG}][{T.DIFF_ADD}]{right}[/{T.DIFF_ADD}][/{T.DIFF_ADD_BG}]"
+                text_line.append(right, style=f"{T.DIFF_ADD} {T.DIFF_ADD_BG}")
             elif line.right_kind == "context":
-                right_markup = f"[dim]{right}[/dim]"
+                text_line.append(right, style="dim")
             else:
-                right_markup = right
+                text_line.append(right)
 
-            rendered.append(f"{left_markup}[dim] │ [/dim]{right_markup}")
+            rendered.append(text_line)
         return rendered
-    return _colorize_diff(raw, ignore_whitespace=ignore_whitespace)
+    return [Text.from_markup(line) for line in _colorize_diff(raw, ignore_whitespace=ignore_whitespace)]
 
 
 # ─── Main App ────────────────────────────────────────────────────────────────

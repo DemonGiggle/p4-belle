@@ -136,7 +136,7 @@ class FileDiffView(FastScrollableContainer):
                 side_by_side=side_by_side,
                 column_width=column_width,
             ):
-                widgets.append(Static(line, markup=True))
+                widgets.append(Static(line))
         else:
             widgets.append(Static("[dim](diff unavailable)[/dim]", markup=True))
 

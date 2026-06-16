@@ -1,8 +1,9 @@
 """TUI tests for ChangesApp diff interactions."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -104,11 +105,11 @@ def test_render_diff_lines_supports_side_by_side():
         side_by_side=True,
     )
 
-    assert any("│" in line for line in rendered)
+    assert any("│" in line.plain for line in rendered)
 
 
 def test_render_diff_lines_keeps_diff_colors_in_side_by_side():
-    """Side-by-side rendering should keep add/delete color markup."""
+    """Side-by-side rendering should keep add/delete styling."""
     from p5 import theme as T
     from p5.tui.changes_app import _render_diff_lines
 
@@ -117,8 +118,9 @@ def test_render_diff_lines_keeps_diff_colors_in_side_by_side():
         side_by_side=True,
     )
 
-    assert any(T.DIFF_DEL_BG in line for line in rendered)
-    assert any(T.DIFF_ADD_BG in line for line in rendered)
+    spans = [span.style for line in rendered for span in line.spans if span.style]
+    assert any(T.DIFF_DEL_BG in style for style in spans)
+    assert any(T.DIFF_ADD_BG in style for style in spans)
 
 
 def test_render_diff_lines_uses_provided_column_width():
@@ -133,9 +135,9 @@ def test_render_diff_lines_uses_provided_column_width():
         column_width=90,
     )
 
-    assert any(before_line in line for line in rendered)
-    assert any(after_line in line for line in rendered)
-    assert not any("…" in line for line in rendered)
+    assert any(before_line in line.plain for line in rendered)
+    assert any(after_line in line.plain for line in rendered)
+    assert not any("…" in line.plain for line in rendered)
 
 
 def test_render_diff_lines_does_not_show_spurious_bracket_escape():
@@ -146,5 +148,17 @@ def test_render_diff_lines_does_not_show_spurious_bracket_escape():
         "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n-old = []\n+new = []\n",
     )
 
-    assert any("[]" in line for line in rendered)
-    assert not any("[\\]" in line for line in rendered)
+    assert any("[]" in line.plain for line in rendered)
+    assert not any("[\\]" in line.plain for line in rendered)
+
+
+def test_render_diff_lines_does_not_render_literal_rich_closing_tags_with_escape_slash():
+    """Literal text that looks like a Rich closing tag should remain plain text."""
+    from p5.tui.changes_app import _render_diff_lines
+
+    rendered = _render_diff_lines(
+        "--- a/src/alpha.cpp\n+++ b/src/alpha.cpp\n@@ -1 +1 @@\n+[/on #1a3a1a]\n",
+    )
+
+    assert any("[/on #1a3a1a]" in line.plain for line in rendered)
+    assert not any("\\[/on #1a3a1a]" in line.plain for line in rendered)
