@@ -58,9 +58,10 @@ p5 completion zsh --install  # install it automatically
 Completions supported:
 - `p5 diff [file]` — completes opened files
 - `p5 delete [file]` — completes opened files
+- `p5 revert [file]` — completes opened files
 - `p5 filelog [file]` — completes depot paths
 - `p5 sync [path]` — completes depot paths
-- `p5 diff -c`, `p5 delete -c`, `p5 submit -c`, `p5 change` — completes pending CLs
+- `p5 diff -c`, `p5 delete -c`, `p5 revert -c`, `p5 submit -c`, `p5 change` — completes pending CLs
 
 ## Commands
 
@@ -128,6 +129,30 @@ Mark these files for delete? [y/N]: y
 ```
 
 Options: `-c CL` to target a specific changelist, `-y` to skip confirmation.
+
+### `p5 revert <files...>`
+
+Discard local change(s), with a confirmation prompt.
+
+```
+Files to be reverted:
+  R  src/auth/login.cpp
+  R  src/net/socket.cpp
+
+Revert these files? [y/N]: y
+
+  reverted  src/auth/login.cpp
+  reverted  src/net/socket.cpp
+```
+
+Options: `-c CL` to only revert files in a changelist, `-a` to only revert unchanged files, `-y` to skip confirmation.
+
+```sh
+p5 revert src/auth/login.cpp       # prompt, then revert
+p5 revert -y src/auth/login.cpp    # skip confirmation
+p5 revert -c 123456 -y src/auth/login.cpp  # scope to CL
+p5 revert -a -y src/auth/login.cpp # only if unchanged
+```
 
 ### `p5 sync [path]`
 

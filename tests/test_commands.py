@@ -875,6 +875,155 @@ class TestDeleteCmd:
         assert isinstance(result.exception, P4Error)
 
 
+# ── p5 revert ────────────────────────────────────────────────────────────────
+
+class TestRevertCmd:
+    def _invoke(self, args, input=None, **dispatcher_kwargs):
+        fake_run, fake_tagged = _make_p4_dispatcher(**dispatcher_kwargs)
+        patches = [
+            patch("p5.p4.run_p4", fake_run),
+            patch("p5.commands.revert.run_p4", fake_run),
+            patch("p5.workspace.run_p4", fake_run),
+            patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            from p5.commands.revert import revert_cmd
+            import p5.workspace as ws
+            ws._workspace = None
+            runner = CliRunner()
+            return runner.invoke(revert_cmd, args, input=input)
+        finally:
+            for p in patches:
+                p.stop()
+            import p5.workspace as ws
+            ws._workspace = None
+
+    def test_revert_with_yes_flag(self):
+        result = self._invoke(
+            ["-y", f"{FAKE_ROOT}/src/login.cpp"],
+            raw_results={
+                "revert": "//depot/myproject/src/login.cpp#4 - reverted\n"
+            },
+        )
+        assert result.exit_code == 0
+        assert "reverted" in result.output
+        assert "login.cpp" in result.output
+
+    def test_revert_prompts_for_confirmation(self):
+        result = self._invoke(
+            [f"{FAKE_ROOT}/src/login.cpp"],
+            input="y\n",
+            raw_results={
+                "revert": "//depot/myproject/src/login.cpp#4 - reverted\n"
+            },
+        )
+        assert result.exit_code == 0
+        assert "Files to be reverted" in result.output
+        assert "reverted" in result.output
+
+    def test_revert_abort_on_decline(self):
+        result = self._invoke(
+            [f"{FAKE_ROOT}/src/login.cpp"],
+            input="n\n",
+            raw_results={
+                "revert": "//depot/myproject/src/login.cpp#4 - reverted\n"
+            },
+        )
+        assert result.exit_code != 0
+        # Header contains "reverted:" — success lines are "  reverted  <rel>".
+        assert "  reverted  " not in result.output
+
+    def test_revert_c_passthrough(self):
+        captured: dict = {}
+
+        fake_run, fake_tagged = _make_p4_dispatcher(
+            raw_results={"revert": "//depot/myproject/src/a.cpp#1 - reverted\n"}
+        )
+
+        def recording_run(args, *, cwd=None, check=True):
+            captured["args"] = args
+            return fake_run(args, cwd=cwd, check=check)
+
+        patches = [
+            patch("p5.p4.run_p4", recording_run),
+            patch("p5.commands.revert.run_p4", recording_run),
+            patch("p5.workspace.run_p4", fake_run),
+            patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
+        ]
+        for pt in patches:
+            pt.start()
+        try:
+            from p5.commands.revert import revert_cmd
+            import p5.workspace as ws
+            ws._workspace = None
+            runner = CliRunner()
+            result = runner.invoke(
+                revert_cmd, ["-y", "-c", "12345", f"{FAKE_ROOT}/src/a.cpp"]
+            )
+        finally:
+            for pt in patches:
+                pt.stop()
+            import p5.workspace as ws
+            ws._workspace = None
+
+        assert result.exit_code == 0
+        assert captured["args"][0] == "revert"
+        assert "-c" in captured["args"]
+        assert "12345" in captured["args"]
+
+    def test_revert_unchanged_passthrough(self):
+        captured: dict = {}
+
+        fake_run, fake_tagged = _make_p4_dispatcher(
+            raw_results={"revert": "//depot/myproject/src/a.cpp#1 - reverted\n"}
+        )
+
+        def recording_run(args, *, cwd=None, check=True):
+            captured["args"] = args
+            return fake_run(args, cwd=cwd, check=check)
+
+        patches = [
+            patch("p5.p4.run_p4", recording_run),
+            patch("p5.commands.revert.run_p4", recording_run),
+            patch("p5.workspace.run_p4", fake_run),
+            patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
+        ]
+        for pt in patches:
+            pt.start()
+        try:
+            from p5.commands.revert import revert_cmd
+            import p5.workspace as ws
+            ws._workspace = None
+            runner = CliRunner()
+            result = runner.invoke(
+                revert_cmd, ["-y", "-a", f"{FAKE_ROOT}/src/a.cpp"]
+            )
+        finally:
+            for pt in patches:
+                pt.stop()
+            import p5.workspace as ws
+            ws._workspace = None
+
+        assert result.exit_code == 0
+        assert "-a" in captured["args"]
+
+    def test_revert_p4_error_exits_nonzero(self):
+        result = self._invoke(
+            ["-y", f"{FAKE_ROOT}/src/missing.cpp"],
+            raw_results={
+                "revert": P4Error("file(s) not opened on this client")
+            },
+        )
+        assert result.exit_code != 0
+
+    def test_revert_no_args_usage_error(self):
+        result = self._invoke([])
+        assert result.exit_code != 0
+        assert "FILES" in result.output
+
+
 # ── p5 submit (direct mode) ─────────────────────────────────────────────────
 
 class TestSubmitCmd:
@@ -931,6 +1080,7 @@ class TestSubmitCmd:
     [
         (["status", "--dummy-data"], "Changes to be submitted"),
         (["delete", "--dummy-data"], "Files to be deleted"),
+        (["revert", "--dummy-data"], "Files to be reverted"),
         (["sync", "--dummy-data"], "Syncing src/auth to head"),
         (["change", "123456", "--dummy-data"], "would open changelist 123456"),
         (["change", "-d", "123456", "--dummy-data"], "Change 123456 deleted"),

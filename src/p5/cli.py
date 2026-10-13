@@ -42,6 +42,7 @@ from p5.commands.filelog import filelog_cmd  # noqa: E402
 from p5.commands.ws      import ws_cmd       # noqa: E402
 from p5.commands.add     import add_cmd      # noqa: E402
 from p5.commands.edit    import edit_cmd     # noqa: E402
+from p5.commands.revert  import revert_cmd   # noqa: E402
 
 main.add_command(status_cmd,  "status")
 main.add_command(diff_cmd,    "diff")
@@ -54,6 +55,7 @@ main.add_command(filelog_cmd, "filelog")
 main.add_command(ws_cmd,      "ws")
 main.add_command(add_cmd,     "add")
 main.add_command(edit_cmd,    "edit")
+main.add_command(revert_cmd,  "revert")
 
 
 _COMPLETION_SCRIPTS = {
