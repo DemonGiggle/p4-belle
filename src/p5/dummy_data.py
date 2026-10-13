@@ -652,6 +652,23 @@ def render_delete() -> None:
         console.print(line)
 
 
+def render_revert(files: tuple[str, ...] = ("src/auth/login.cpp", "src/net/socket.cpp")) -> None:
+    console.print(Text("Files to be reverted:", style=theme.SECTION))
+    for path in files:
+        line = Text()
+        line.append("  R  ", style=f"bold {theme.DELETED}")
+        line.append(path)
+        console.print(line)
+    console.print()
+    console.print("Revert these files? [y/N]: y")
+    console.print()
+    for path in files:
+        line = Text()
+        line.append("  reverted  ", style=f"bold {theme.DELETED}")
+        line.append(path)
+        console.print(line)
+
+
 def render_sync() -> None:
     console.print("[dim]Syncing src/auth to head...[/dim]")
     console.print()

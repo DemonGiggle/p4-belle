@@ -14,6 +14,7 @@
    - [status](#status)
    - [diff](#diff)
    - [delete](#delete)
+   - [revert](#revert)
    - [sync](#sync)
    - [change](#change)
    - [submit](#submit)
@@ -77,6 +78,7 @@ src/p5/
 │   ├── status.py
 │   ├── diff.py
 │   ├── delete.py
+│   ├── revert.py
 │   ├── sync.py
 │   ├── change.py
 │   ├── submit.py
@@ -275,7 +277,37 @@ Mark these files for delete? [y/N]: y
 
 **Rationale**: `p5 edit` and `p5 add` are intentionally absent — they wrap `p4 edit`/`p4 add` with minimal UX gain. Delete is the exception because it is irreversible enough to warrant a confirmation step.
 
-**Implementation**: Resolves relative paths to depot paths, shows the list, confirms, then calls `p4 delete [-c CL] <depot_paths>`. Parses "opened for delete" lines for display; other lines shown dimmed.
+**Implementation**: Resolves relative paths to depot paths, shows the list, confirms, then calls `p4 delete [-c CL] <depot_paths>`. Parses "opened for delete" lines for display; other lines shown dimmed. Failures exit non-zero (issue #10 convention: `P4Error` propagates to `P5Group` or raises `ClickException`, never silent `return`).
+
+---
+
+### `revert`
+
+Discard local change(s), with a confirmation prompt before calling `p4 revert`.
+
+```
+p5 revert FILES... [-c CL] [-a] [-y]
+```
+
+| Option | Description |
+|---|---|
+| `FILES` | One or more paths (relative, absolute, or depot) |
+| `-c CL` | Only revert files in changelist |
+| `-a, --unchanged` | Only revert unchanged files (passthrough to `p4 revert -a`) |
+| `-y` | Skip confirmation prompt |
+
+**Output**:
+
+```
+Files to be reverted:
+  R  src/auth/login.cpp
+
+Revert these files? [y/N]: y
+
+  reverted  src/auth/login.cpp
+```
+
+**Implementation**: Resolves relative paths to depot paths via `local_to_depot`, shows `R`-style colored list, confirms via `click.confirm(..., abort=True)`, then calls `p4 revert [-a] [-c CL] <depot_paths>`. Parses " - reverted" lines into `reverted <rel>` lines (red, like `delete`); other lines shown dimmed. Failures raise `click.ClickException` (non-zero exit, issue #10 convention). No-args raises `click.UsageError` (exit != 0). `FILES` completes via `complete_opened_files`, `-c` via `complete_pending_cls`.
 
 ---
 
@@ -678,6 +710,8 @@ p5 completion [SHELL] [--install]
 | `diff` | `-c` | `complete_pending_cls` |
 | `delete` | `FILES` | `complete_opened_files` |
 | `delete` | `-c` | `complete_pending_cls` |
+| `revert` | `FILES` | `complete_opened_files` |
+| `revert` | `-c` | `complete_pending_cls` |
 | `filelog` | `FILE` | `complete_depot_path` |
 | `sync` | `PATH` | `complete_depot_path` |
 | `change` | `CL_NUMBER` | `complete_pending_cls` |
@@ -687,7 +721,7 @@ p5 completion [SHELL] [--install]
 | `edit` | `FILES` | `complete_opened_files` |
 | `edit` | `-c` | `complete_pending_cls` |
 
-**Unified TUI keys** (see `src/p5/tui/keys.py`): `j/down/n` + `k/up/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit. `diff` adds `[/]` tabs, `n/p` file nav, `/` filename filter. `ws` reserves `w`/`b`. All commands accept `-h` / `--help` and `--dummy-data` (including `add` / `edit`) with identical help text.
+**Unified TUI keys** (see `src/p5/tui/keys.py`): `j/down/n` + `k/up/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit. `diff` adds `[/]` tabs, `n/p` file nav, `/` filename filter. `ws` reserves `w`/`b`. All commands accept `-h` / `--help` and `--dummy-data` (including `add` / `edit` / `revert`) with identical help text.
 
 ---
 
