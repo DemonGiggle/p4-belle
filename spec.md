@@ -682,9 +682,9 @@ p5 completion [SHELL] [--install]
 | `sync` | `PATH` | `complete_depot_path` |
 | `change` | `CL_NUMBER` | `complete_pending_cls` |
 | `submit` | `-c` | `complete_pending_cls` |
-| `add` | `FILES` | `complete_opened_files` |
+| `add` | `FILES` | `complete_add_files` |
 | `add` | `-c` | `complete_pending_cls` |
-| `edit` | `FILES` | `complete_opened_files` |
+| `edit` | `FILES` | `complete_edit_files` |
 | `edit` | `-c` | `complete_pending_cls` |
 
 **Unified TUI keys** (see `src/p5/tui/keys.py`): `j/down/n` + `k/up/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit. `diff` adds `[/]` tabs, `n/p` file nav, `/` filename filter. `ws` reserves `w`/`b`. All commands accept `-h` / `--help` and `--dummy-data` (including `add` / `edit`) with identical help text.

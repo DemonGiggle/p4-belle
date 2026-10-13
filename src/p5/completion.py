@@ -99,3 +99,88 @@ def complete_depot_path(ctx, param, incomplete: str) -> list[CompletionItem]:
         for c in candidates
         if c.startswith(rel_incomplete)
     ]
+
+
+def _filesystem_candidates(incomplete: str) -> list[CompletionItem]:
+    """Return on-disk path completions matching incomplete (cwd-relative)."""
+    import os
+    from pathlib import Path
+
+    if incomplete.startswith("//"):
+        return []
+    try:
+        if incomplete == "" or incomplete.endswith(("/", os.sep)):
+            base_dir = Path(incomplete or ".")
+            prefix = ""
+            dir_part = incomplete or ""
+        elif "/" in incomplete or os.sep in incomplete:
+            sep = "/" if "/" in incomplete else os.sep
+            dir_part, _, prefix = incomplete.rpartition(sep)
+            dir_part += sep
+            base_dir = Path(dir_part or ".")
+        else:
+            base_dir = Path(".")
+            prefix = incomplete
+            dir_part = ""
+        try:
+            entries = list(base_dir.iterdir())
+        except OSError:
+            return []
+        items = []
+        for e in sorted(entries, key=lambda p: p.name):
+            if not e.name.startswith(prefix):
+                continue
+            comp = f"{dir_part}{e.name}"
+            if e.is_dir():
+                comp += "/"
+            items.append(CompletionItem(comp))
+        return items
+    except Exception:
+        return []
+
+
+@_safe
+def complete_add_files(ctx, param, incomplete: str) -> list[CompletionItem]:
+    """Complete untracked files for `p5 add`.
+
+    Primary source is `p4 reconcile -n -a` candidates; always also
+    includes on-disk matches so TAB still suggests something when
+    reconcile is empty or p4 is unavailable.
+    """
+    from p5.p4 import run_p4_tagged
+    from p5.workspace import any_to_rel
+
+    seen: dict[str, None] = {}
+    try:
+        records = run_p4_tagged(["reconcile", "-n", "-a"])
+    except Exception:
+        records = []
+    for r in records:
+        raw = (
+            r.get("depotFile")
+            or r.get("clientFile")
+            or r.get("localFile")
+            or r.get("path")
+            or ""
+        )
+        if not raw:
+            continue
+        try:
+            rel = any_to_rel(raw)
+        except Exception:
+            continue
+        if rel.startswith(incomplete):
+            seen[rel] = None
+    for item in _filesystem_candidates(incomplete):
+        if item.value not in seen:
+            seen[item.value] = None
+    return [CompletionItem(v) for v in seen]
+
+
+@_safe
+def complete_edit_files(ctx, param, incomplete: str) -> list[CompletionItem]:
+    """Complete versioned files for `p5 edit`.
+
+    Reuses depot-path logic (all tracked files), not just `p4 opened`.
+    """
+    return complete_depot_path(ctx, param, incomplete)
