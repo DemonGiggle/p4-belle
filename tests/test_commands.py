@@ -602,6 +602,54 @@ class TestSyncCmd:
         assert "a.cpp" in result.output
         assert "b.cpp" in result.output
 
+    def test_sync_p4_error_exits_nonzero(self):
+        result = self._invoke(
+            raw_results={"sync": P4Error("connection failed")},
+            tagged_results={"changes": []},
+        )
+        assert result.exit_code != 0  # P4Error propagates to P5Group (exit 1)
+        assert isinstance(result.exception, P4Error)
+
+    def test_sync_refreshing_counted(self):
+        sync_output = (
+            "//depot/myproject/src/a.cpp#3 - refreshing /home/testuser/workspace/myproject/src/a.cpp\n"
+        )
+        result = self._invoke(
+            raw_results={"sync": sync_output},
+            tagged_results={"changes": []},
+        )
+        assert result.exit_code == 0
+        assert "refreshed" in result.output
+        assert "a.cpp" in result.output
+        assert "already up-to-date" not in result.output
+
+    def test_sync_unknown_lines_shown_dimmed(self):
+        sync_output = (
+            "//depot/myproject/src/a.cpp#3 - updating /home/testuser/workspace/myproject/src/a.cpp\n"
+            "//depot/myproject/src/a.cpp#3 - ignored - preview only\n"
+        )
+        result = self._invoke(
+            raw_results={"sync": sync_output},
+            tagged_results={"changes": []},
+        )
+        assert result.exit_code == 0
+        assert "ignored - preview only" in result.output
+        assert "1 updated" in result.output
+        assert "already up-to-date" not in result.output
+
+    def test_sync_partial_result_with_up_to_date_line(self):
+        sync_output = (
+            "//depot/myproject/src/a.cpp#3 - updating /home/testuser/workspace/myproject/src/a.cpp\n"
+            "file(s) up-to-date.\n"
+        )
+        result = self._invoke(
+            raw_results={"sync": sync_output},
+            tagged_results={"changes": []},
+        )
+        assert result.exit_code == 0
+        assert "1 updated" in result.output
+        assert "already up-to-date" not in result.output
+
 
 # ── p5 filelog ───────────────────────────────────────────────────────────────
 
@@ -659,6 +707,14 @@ class TestFilelogCmd:
         assert "alice" in result.output
         assert "Fix bug" in result.output
 
+    def test_filelog_p4_error_exits_nonzero(self):
+        result = self._invoke(
+            ["main.cpp"],
+            tagged_results={"filelog": P4Error("connection failed")},
+        )
+        assert result.exit_code != 0  # P4Error propagates to P5Group (exit 1)
+        assert isinstance(result.exception, P4Error)
+
 
 # ── p5 delete ────────────────────────────────────────────────────────────────
 
@@ -703,8 +759,8 @@ class TestDeleteCmd:
                 "delete": P4Error("file(s) not on client")
             },
         )
-        assert result.exit_code == 0  # error is caught and printed
-        assert "error" in result.output
+        assert result.exit_code != 0  # P4Error propagates to P5Group (exit 1)
+        assert isinstance(result.exception, P4Error)
 
 
 # ── p5 submit (direct mode) ─────────────────────────────────────────────────
@@ -802,3 +858,34 @@ def test_dummy_data_mode_launches_tui(args, patch_target):
 
     assert result.exit_code == 0
     mock_run.assert_called_once()
+
+
+def test_group_reports_p4_error_with_exit_1():
+    from p5.cli import main
+
+    fake_run, fake_tagged = _make_p4_dispatcher(
+        raw_results={"sync": P4Error("connection failed")},
+        tagged_results={"changes": []},
+    )
+    patches = [
+        patch("p5.p4.run_p4", fake_run),
+        patch("p5.commands.sync.run_p4", fake_run),
+        patch("p5.commands.sync.run_p4_tagged", fake_tagged),
+        patch("p5.workspace.run_p4", fake_run),
+        patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"),
+    ]
+    for pch in patches:
+        pch.start()
+    try:
+        import p5.workspace as ws
+        ws._workspace = None
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync"])
+    finally:
+        for pch in patches:
+            pch.stop()
+        import p5.workspace as ws
+        ws._workspace = None
+    assert result.exit_code == 1
+    assert "error" in result.output
+    assert "connection failed" in result.output

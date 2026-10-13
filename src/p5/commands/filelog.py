@@ -10,7 +10,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_depot_path
 from p5.dummy_data import render_filelog
-from p5.p4 import P4Error, run_p4_tagged
+from p5.p4 import run_p4_tagged
 from p5.workspace import any_to_rel, check_cwd_in_workspace, local_to_depot
 
 console = Console()
@@ -35,11 +35,8 @@ def filelog_cmd(file: str | None, max_rev: int, dummy_data: bool) -> None:
     depot_path = local_to_depot(file)
     rel        = any_to_rel(depot_path)
 
-    try:
-        records = run_p4_tagged(["filelog", "-m", str(max_rev), depot_path])
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
-        return
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    records = run_p4_tagged(["filelog", "-m", str(max_rev), depot_path])
 
     if not records:
         console.print("[dim]no history found[/dim]")

@@ -49,17 +49,17 @@ def ws_cmd(user: str | None, no_tui: bool, dummy_data: bool) -> None:
 
     try:
         from p5.tui.ws_app import WorkspaceApp
-        app = WorkspaceApp(user=user)
-        app.run()
-        if app.selected_client:
-            console.print(
-                Text("  switched to  ", style=f"bold {T.ADDED}") +
-                Text(app.selected_client, style=T.CL_NUM)
-            )
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
     except ImportError as e:
         console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")
+        raise SystemExit(1)
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    app = WorkspaceApp(user=user)
+    app.run()
+    if app.selected_client:
+        console.print(
+            Text("  switched to  ", style=f"bold {T.ADDED}") +
+            Text(app.selected_client, style=T.CL_NUM)
+        )
 
 
 def _print_list(user: str | None) -> None:
@@ -79,11 +79,8 @@ def _print_list(user: str | None) -> None:
     if resolved_user:
         args += ["-u", resolved_user]
 
-    try:
-        records = run_p4_tagged(args)
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
-        return
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    records = run_p4_tagged(args)
 
     table = Table(show_header=True, header_style=f"bold {T.SECTION}", box=None, padding=(0, 2))
     table.add_column("", width=2)

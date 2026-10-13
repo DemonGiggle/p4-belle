@@ -7,7 +7,6 @@ import click
 from rich.console import Console
 
 from p5.dummy_data import build_changes_records
-from p5.p4 import P4Error
 from p5.workspace import check_cwd_in_workspace
 
 console = Console()
@@ -56,14 +55,14 @@ def changes_cmd(path: str | None, user: str | None, max_cls: int,
 
     try:
         from p5.tui.changes_app import ChangesApp
-        app = ChangesApp(
-            user=user,
-            max_cls=max_cls,
-            cl_status=cl_status,
-            p4_path=p4_path,
-        )
-        app.run()
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
     except ImportError as e:
         console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")
+        raise SystemExit(1)
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    app = ChangesApp(
+        user=user,
+        max_cls=max_cls,
+        cl_status=cl_status,
+        p4_path=p4_path,
+    )
+    app.run()
