@@ -202,8 +202,13 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
 @click.argument("path", default=None, required=False,
                 shell_complete=complete_depot_path)
 @click.option("-a", "--all", "show_all", is_flag=True,
-              help="Show entire depot, not just current directory")
-@click.option("-r", "--reconcile", "_reconcile_flag", is_flag=True, hidden=True)
+              help="Show entire depot, not just current directory "
+              "(runs reconcile over //...; can be slow — "
+              "use with --no-reconcile for a fast view)")
+@click.option("--no-reconcile", "--fast", "--opened-only", "no_reconcile",
+              is_flag=True, default=False,
+              help="Skip 'p4 reconcile' filesystem scan; "
+              "show only opened files (fast)")
 @click.option("-x", "--exclude", "excludes", multiple=True,
               help="Exclude paths matching this prefix (repeatable)")
 @click.option("--dummy-data", is_flag=True,
@@ -211,19 +216,24 @@ def _run_reconcile_with_progress(reconcile_path: str) -> list[dict]:
 def status_cmd(
     path: str | None,
     show_all: bool,
-    _reconcile_flag: bool,
+    no_reconcile: bool,
     excludes: tuple[str, ...],
     dummy_data: bool,
 ) -> None:
     """Show pending changes in the current directory (like git status).
 
     Shows both opened files and local reconcile results.
+
+    By default runs 'p4 reconcile' to find local changes (can be slow on
+    large workspaces, especially with -a). Use --no-reconcile for a fast
+    opened-files-only view.
     """
     if dummy_data:
         render_status()
         return
 
-    _dbg(f"invoked: path={path!r} show_all={show_all!r} excludes={excludes!r}")
+    _dbg(f"invoked: path={path!r} show_all={show_all!r} "
+         f"no_reconcile={no_reconcile!r} excludes={excludes!r}")
 
     t0 = time.monotonic()
     if not show_all:
@@ -262,12 +272,15 @@ def status_cmd(
         opened = [r for r in opened if _under(_local_abs(r, ws), filter_root)]
         _dbg(f"local filter: {before} → {len(opened)} record(s) under {filter_root!r}")
 
-    reconcile_path = (
-        "//..."
-        if filter_root is None
-        else filter_root.rstrip(os.sep) + "/..."
-    )
-    reconcile = _run_reconcile_with_progress(reconcile_path)
+    if no_reconcile:
+        reconcile: list[dict] = []
+    else:
+        reconcile_path = (
+            "//..."
+            if filter_root is None
+            else filter_root.rstrip(os.sep) + "/..."
+        )
+        reconcile = _run_reconcile_with_progress(reconcile_path)
 
     # --- Render -----------------------------------------------------------------
 
@@ -310,8 +323,21 @@ def status_cmd(
         filtered_reconcile.append((rel, rec.get("action", "?")))
 
     if not cl_files and not filtered_reconcile:
-        console.print("[dim]nothing to commit, working tree clean[/dim]")
+        if no_reconcile:
+            console.print(
+                "[dim]reconcile skipped (--no-reconcile); "
+                "showing opened files only[/dim]"
+            )
+            console.print("[dim]no opened files[/dim]")
+        else:
+            console.print("[dim]nothing to commit, working tree clean[/dim]")
         return
+
+    if no_reconcile:
+        console.print(
+            "[dim]reconcile skipped (--no-reconcile); "
+            "showing opened files only[/dim]"
+        )
 
     if filtered_reconcile:
         console.print(Text("Local changes not opened in p4:", style=theme.SECTION))
