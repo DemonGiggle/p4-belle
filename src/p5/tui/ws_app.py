@@ -172,11 +172,15 @@ class WorkspaceApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("j,down",  "cursor_down",  "Down",  show=False),
-        Binding("k,up",    "cursor_up",    "Up",    show=False),
-        Binding("slash",   "start_filter", "Filter"),
-        Binding("r",       "reload",       "Reload"),
-        Binding("q",       "quit",         "Quit"),
+        Binding("j,down,n", "cursor_down", "Down", show=False),
+        Binding("k,up,p", "cursor_up", "Up", show=False),
+        Binding("enter", "select_item", "Switch", show=False),
+        Binding("space", "select_item", "Switch", show=False),
+        Binding("escape", "quit", "Quit", show=False),
+        Binding("slash", "start_filter", "Filter"),
+        Binding("r", "reload", "Reload"),
+        Binding("question_mark", "show_help", "Help", show=True),
+        Binding("q", "quit", "Quit"),
     ]
 
     filter_text: reactive[str] = reactive("")
@@ -250,7 +254,7 @@ class WorkspaceApp(App):
         suffix = f"  [dim](filtered: {n}/{total})[/dim]" if self.filter_text else ""
         self._set_status(
             f"[dim]{total} workspace{'s' if total != 1 else ''}[/dim]{suffix}  "
-            f"  [dim][Enter] switch  [/] filter  [r] reload  [q] quit[/dim]"
+            f"  [dim]Enter+space switch  n+p next/prev  / filter  r reload  Esc+q quit  ? help[/dim]"
         )
 
     def _set_status(self, text: str) -> None:
@@ -278,6 +282,19 @@ class WorkspaceApp(App):
         self.query_one("#list-view", ListView).clear()
         self._set_status("[dim]Reloading...[/dim]")
         self._load()
+
+    def action_select_item(self) -> None:
+        # Space/Enter alias when ListView.Selected is not fired (e.g. space).
+        if self._filtering:
+            return
+        lv = self.query_one("#list-view", ListView)
+        item = lv.highlighted_child
+        if isinstance(item, ClientItem):
+            self._do_switch(item.rec)
+
+    def action_show_help(self) -> None:
+        from p5.tui.keys import APP_HELP
+        self.notify(APP_HELP["ws"], timeout=8)
 
     def action_start_filter(self) -> None:
         fb = self.query_one("#filter-bar", Static)

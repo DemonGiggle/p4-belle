@@ -450,20 +450,24 @@ class SubmitApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("j,down", "cursor_down", "Down",        show=False),
-        Binding("k,up",   "cursor_up",   "Up",          show=False),
-        Binding("enter",  "select_item", "Select",      show=False),
-        Binding("escape", "go_back",     "Back"),
-        Binding("space",  "view_diff",   "Diff",        show=False),
-        Binding("b",      "toggle_side_by_side", "View", show=False),
-        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
-        Binding("m",      "move_file",   "Move"),
-        Binding("r",      "revert_file", "Revert"),
-        Binding("u",      "revert_unchanged", "Revert unchanged"),
-        Binding("e",      "edit_desc",   "Edit desc"),
-        Binding("s",      "do_submit",   "Submit"),
-        Binding("slash",  "start_filter", "Filter"),
-        Binding("q",      "quit",        "Quit"),
+        Binding("j,down,n", "cursor_down", "Down", show=False),
+        Binding("k,up,p", "cursor_up", "Up", show=False),
+        Binding("enter", "select_item", "Select", show=False),
+        Binding("escape", "go_back", "Back"),
+        Binding("space", "view_diff", "Diff", show=False),
+        Binding("b", "toggle_side_by_side", "View", show=False),
+        Binding("w", "toggle_whitespace", "Whitespace", show=False),
+        Binding("ctrl+f", "page_down", "Page down", show=False),
+        Binding("ctrl+b", "page_up", "Page up", show=False),
+        Binding("m", "move_file", "Move"),
+        Binding("x", "revert_file", "Revert"),
+        Binding("r", "reload_current", "Reload"),
+        Binding("u", "revert_unchanged", "Revert unchanged"),
+        Binding("e", "edit_desc", "Edit desc"),
+        Binding("s", "do_submit", "Submit"),
+        Binding("slash", "start_filter", "Filter"),
+        Binding("question_mark", "show_help", "Help", show=True),
+        Binding("q", "quit", "Quit"),
     ]
 
     def __init__(self, pending_cls: list[PendingCL] | None = None, *, demo_mode: bool = False) -> None:
@@ -506,23 +510,24 @@ class SubmitApp(App):
         if self._current_cl:
             if self._detail_open:
                 fb.update(
-                    f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                    f"[dim]j/k[/dim] scroll diff  [dim]ctrl+f/b[/dim] page  [dim]w[/dim] whitespace:{whitespace}  "
                     f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
-                    "[dim]Esc[/dim] back  [dim]q[/dim] quit"
+                    "[dim]Esc[/dim] back  [dim]?[/dim] help  [dim]q[/dim] quit"
                 )
             else:
                 fb.update(
                     "[dim]space[/dim] diff  "
                     f"[dim]w[/dim] whitespace:{whitespace}  "
                     f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
-                    "[dim]m[/dim] move  [dim]r[/dim] revert  "
+                    "[dim]m[/dim] move  [dim]x[/dim] revert  "
                     "[dim]u[/dim] revert unchanged  [dim]e[/dim] edit desc  "
-                    "[dim]s[/dim] submit  [dim]Esc[/dim] back  [dim]q[/dim] quit"
+                    "[dim]s[/dim] submit  [dim]r[/dim] reload  [dim]n/p[/dim] next/prev  "
+                    "[dim]Esc[/dim] back  [dim]?[/dim] help  [dim]q[/dim] quit"
                 )
         else:
             fb.update(
-                "[dim]Enter[/dim] select CL  "
-                "[dim]/[/dim] filter  [dim]q[/dim] quit"
+                "[dim]Enter/space[/dim] select CL  "
+                "[dim]n/p[/dim] next/prev  [dim]/[/dim] filter  [dim]r[/dim] reload  [dim]?[/dim] help  [dim]q[/dim] quit"
             )
 
     # ── data loading ──────────────────────────────────────────────────────
@@ -957,6 +962,30 @@ class SubmitApp(App):
         self._update_footer()
         if self._detail_open and self._detail_rec is not None:
             self._refresh_detail(self._detail_rec)
+
+    def action_reload_current(self) -> None:
+        if self._filtering or self._detail_open:
+            return
+        if self._current_cl:
+            self._reload_current_cl()
+        else:
+            self._load_cls()
+
+    def action_page_down(self) -> None:
+        if self._filtering:
+            return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=10, animate=False, immediate=True)
+
+    def action_page_up(self) -> None:
+        if self._filtering:
+            return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=-10, animate=False, immediate=True)
+
+    def action_show_help(self) -> None:
+        from p5.tui.keys import APP_HELP
+        self.notify(APP_HELP["submit"], timeout=8)
 
     def on_resize(self) -> None:
         if (

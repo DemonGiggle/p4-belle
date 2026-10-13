@@ -6,6 +6,8 @@ from rich.console import Console
 from rich.text import Text
 
 from p5 import theme
+from p5.completion import complete_opened_files, complete_pending_cls
+from p5.dummy_data import render_edit
 from p5.p4 import P4Error, run_p4
 from p5.workspace import any_to_rel, local_to_depot
 
@@ -13,10 +15,16 @@ console = Console()
 
 
 @click.command()
-@click.argument("files", nargs=-1, required=True)
-@click.option("-c", "--cl", default=None, help="Add to changelist")
-def edit_cmd(files: tuple[str, ...], cl: str | None) -> None:
+@click.argument("files", nargs=-1, required=True, shell_complete=complete_opened_files)
+@click.option("-c", "--cl", default=None, help="Add to a specific changelist",
+              shell_complete=complete_pending_cls)
+@click.option("--dummy-data", is_flag=True,
+              help="Display sample output instead of querying Perforce")
+def edit_cmd(files: tuple[str, ...], cl: str | None, dummy_data: bool) -> None:
     """Open file(s) for edit."""
+    if dummy_data:
+        render_edit(files or ("src/auth/login.cpp",))
+        return
     args = ["edit"]
     if cl:
         args += ["-c", cl]

@@ -512,7 +512,7 @@ async def test_space_opens_diff_and_escape_returns_to_list():
 
 @pytest.mark.asyncio
 async def test_r_reverts_highlighted_file():
-    """'r' should revert the highlighted file after confirmation."""
+    """'x' should revert the highlighted file after confirmation (unified keys: r=reload)."""
     from p5.tui.change_app import ChangeApp, FileItem
 
     opened = list(FAKE_OPENED_DEFAULT)
@@ -547,7 +547,7 @@ async def test_r_reverts_highlighted_file():
             await pilot.pause()
             assert len(app.query(FileItem)) == 3
 
-            await pilot.press("r")
+            await pilot.press("x")
             await pilot.pause()
             for ch in "revert":
                 await pilot.press(ch)
@@ -558,6 +558,30 @@ async def test_r_reverts_highlighted_file():
             assert len(app._files) == 2
             assert len(app.query(FileItem)) == 2
             assert all("alpha.cpp" not in f.depot_file for f in app._files)
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_r_reloads_instead_of_reverting():
+    """'r' is reload in unified keys and must not open the revert modal."""
+    from p5.tui.change_app import ChangeApp, FileItem, RevertConfirmScreen
+
+    patches = _make_patches()
+    for p in patches:
+        p.start()
+    try:
+        app = ChangeApp()
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            assert len(app.query(FileItem)) == 3
+
+            await pilot.press("r")
+            await pilot.pause()
+            # No revert modal should appear; file list unchanged.
+            assert len(app.screen_stack) == 1 or not isinstance(app.screen, RevertConfirmScreen)
+            assert len(app._files) == 3
     finally:
         for p in patches:
             p.stop()
