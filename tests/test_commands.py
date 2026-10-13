@@ -160,6 +160,118 @@ class TestStatusCmd:
         assert "new.cpp" in result.output
         assert "Local changes not opened" in result.output
 
+    def test_no_reconcile_skips_reconcile(self):
+        """--no-reconcile never runs reconcile but still renders opened files."""
+        from unittest.mock import MagicMock
+
+        opened = [
+            {"depotFile": "//depot/myproject/src/main.cpp",
+             "clientFile": f"//{FAKE_CLIENT}/src/main.cpp",
+             "action": "edit", "change": "default"},
+        ]
+        fake_run, fake_tagged = _make_p4_dispatcher(
+            tagged_results={"opened": opened, "reconcile": []}
+        )
+        opened_spy = MagicMock(side_effect=fake_tagged)
+        from p5.commands.status import status_cmd
+        import p5.workspace as ws
+        runner = CliRunner()
+        with patch("p5.p4.run_p4", fake_run), \
+             patch("p5.commands.status.run_p4_tagged", opened_spy), \
+             patch("p5.workspace.run_p4", fake_run), \
+             patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"), \
+             patch("p5.commands.status._run_reconcile_with_progress") as mock_rec:
+            ws._workspace = None
+            try:
+                result = runner.invoke(status_cmd, ["--no-reconcile"])
+            finally:
+                ws._workspace = None
+        assert result.exit_code == 0, result.output
+        mock_rec.assert_not_called()
+        assert opened_spy.called
+        assert any("opened" in str(c) for c in opened_spy.call_args_list)
+        assert "main.cpp" in result.output
+        assert "reconcile skipped" in result.output
+        assert "Local changes not opened" not in result.output
+
+    def test_no_reconcile_aliases_skip_reconcile(self):
+        """--fast and --opened-only are aliases for --no-reconcile."""
+        for alias in ("--fast", "--opened-only"):
+            result = self._invoke(
+                args=[alias],
+                tagged_results={
+                    "opened": [
+                        {"depotFile": "//depot/myproject/src/a.cpp",
+                         "clientFile": f"//{FAKE_CLIENT}/src/a.cpp",
+                         "action": "edit", "change": "default"},
+                    ],
+                    # If reconcile ran, this untracked file would appear.
+                    # With the flag it must be skipped, so output must not
+                    # contain it even though the dispatcher would return it.
+                    "reconcile": [
+                        {"depotFile": "//depot/myproject/src/untracked.cpp",
+                         "clientFile": f"//{FAKE_CLIENT}/src/untracked.cpp",
+                         "action": "add"},
+                    ],
+                },
+            )
+            # NOTE: _invoke's fake dispatches reconcile via run_p4_tagged,
+            # but --no-reconcile bypasses _run_reconcile_with_progress
+            # entirely, so untracked.cpp must not render.
+            assert result.exit_code == 0, (alias, result.output)
+            assert "a.cpp" in result.output
+            assert "untracked.cpp" not in result.output
+            assert "reconcile skipped" in result.output
+
+    def test_default_runs_reconcile(self):
+        """Default status still runs reconcile (opt-out, not opt-in)."""
+        fake_run, fake_tagged = _make_p4_dispatcher(
+            tagged_results={
+                "opened": P4Error("file(s) not opened on this client"),
+                "reconcile": [],
+            }
+        )
+        from p5.commands.status import status_cmd
+        import p5.workspace as ws
+        runner = CliRunner()
+        with patch("p5.p4.run_p4", fake_run), \
+             patch("p5.commands.status.run_p4_tagged", fake_tagged), \
+             patch("p5.workspace.run_p4", fake_run), \
+             patch("os.getcwd", return_value=f"{FAKE_ROOT}/src"), \
+             patch("p5.commands.status._run_reconcile_with_progress",
+                   return_value=[]) as mock_rec:
+            ws._workspace = None
+            try:
+                result = runner.invoke(status_cmd, [])
+            finally:
+                ws._workspace = None
+        assert result.exit_code == 0, result.output
+        mock_rec.assert_called_once()
+        assert "reconcile skipped" not in result.output
+
+    def test_no_reconcile_clean_shows_note(self):
+        """--no-reconcile with no opened files shows skipped note, not clean."""
+        result = self._invoke(
+            args=["--no-reconcile"],
+            tagged_results={
+                "opened": P4Error("file(s) not opened on this client"),
+                "reconcile": [],
+            },
+        )
+        assert result.exit_code == 0
+        assert "reconcile skipped" in result.output
+        assert "no opened files" in result.output
+
+    def test_status_help_documents_cost(self):
+        """--help documents --no-reconcile and -a reconcile cost."""
+        from p5.commands.status import status_cmd
+        runner = CliRunner()
+        result = runner.invoke(status_cmd, ["--help"])
+        assert result.exit_code == 0
+        assert "--no-reconcile" in result.output
+        assert "-a" in result.output
+        assert "reconcile" in result.output.lower()
+
     def test_exclude_single_path(self):
         """--exclude hides matching opened files (cwd-relative).
 
