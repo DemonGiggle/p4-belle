@@ -8,7 +8,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
 from p5.dummy_data import render_edit
-from p5.p4 import P4Error, run_p4
+from p5.p4 import run_p4
 from p5.workspace import any_to_rel, local_to_depot
 
 console = Console()
@@ -30,11 +30,8 @@ def edit_cmd(files: tuple[str, ...], cl: str | None, dummy_data: bool) -> None:
         args += ["-c", cl]
     args += [local_to_depot(f) for f in files]
 
-    try:
-        raw = run_p4(args)
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
-        return
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    raw = run_p4(args)
 
     for line in raw.splitlines():
         # p4 output: //depot/path/file.cpp#1 - opened for edit

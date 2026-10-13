@@ -16,9 +16,10 @@ from p5.workspace import any_to_rel, check_cwd_in_workspace
 console = Console()
 
 # p4 sync output line patterns
-_UPDATED_RE = re.compile(r"^(.+?)#(\d+) - updating (.+)")
-_ADDED_RE   = re.compile(r"^(.+?)#(\d+) - added as (.+)")
-_DELETED_RE = re.compile(r"^(.+?)#(\d+) - deleted as (.+)")
+_UPDATED_RE   = re.compile(r"^(.+?)#(\d+) - updating (.+)")
+_REFRESHING_RE = re.compile(r"^(.+?)#(\d+) - refreshing (.+)")
+_ADDED_RE     = re.compile(r"^(.+?)#(\d+) - added as (.+)")
+_DELETED_RE   = re.compile(r"^(.+?)#(\d+) - deleted as (.+)")
 _REV_RE     = re.compile(r"^(.+?)#(\d+) - is sync'd at #(\d+)")
 
 
@@ -77,13 +78,11 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool, dummy
     console.print(f"[dim]Syncing {display} to head...[/dim]")
     console.print()
 
-    try:
-        raw = run_p4(args)
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
-        return
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    raw = run_p4(args)
 
-    updated = added = deleted = 0
+    updated = added = deleted = refreshed = 0
+    saw_other_output = False
 
     for line in raw.splitlines():
         if m := _UPDATED_RE.match(line):
@@ -95,6 +94,15 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool, dummy
             t.append(f"#{rev}", style=theme.DATE)
             console.print(t)
             updated += 1
+        elif m := _REFRESHING_RE.match(line):
+            rel = any_to_rel(m.group(1))
+            rev = m.group(2)
+            t = Text()
+            t.append("  refreshed  ", style=f"bold {theme.SYNC_UPDATED}")
+            t.append(f"{rel}  ")
+            t.append(f"#{rev}", style=theme.DATE)
+            console.print(t)
+            refreshed += 1
         elif m := _ADDED_RE.match(line):
             rel = any_to_rel(m.group(1))
             rev = m.group(2)
@@ -112,14 +120,21 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool, dummy
             console.print(t)
             deleted += 1
         elif "up-to-date" in line:
-            console.print("[dim]already up-to-date[/dim]")
-            return
+            # Reported after the loop, and only when nothing was synced —
+            # a partial sync must still show its summary below.
+            continue
+        elif line.strip():
+            # Never silently drop p4 output (same convention as add/edit/delete).
+            console.print(f"  [dim]{line}[/dim]")
+            saw_other_output = True
 
-    if updated or added or deleted:
+    if updated or added or deleted or refreshed:
         console.print()
         parts: list[str] = []
         if updated:
             parts.append(f"[{theme.SYNC_UPDATED}]{updated} updated[/{theme.SYNC_UPDATED}]")
+        if refreshed:
+            parts.append(f"[{theme.SYNC_UPDATED}]{refreshed} refreshed[/{theme.SYNC_UPDATED}]")
         if added:
             parts.append(f"[{theme.SYNC_ADDED}]{added} added[/{theme.SYNC_ADDED}]")
         if deleted:
@@ -129,7 +144,7 @@ def sync_cmd(path: str | None, force: bool, dry_run: bool, sync_all: bool, dummy
         # Show which changelists were pulled in
         if not dry_run:
             _show_synced_changelists(p4_path, before_cl)
-    else:
+    elif not saw_other_output:
         console.print("[dim]already up-to-date[/dim]")
 
 

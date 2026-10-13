@@ -6,7 +6,7 @@ from rich.console import Console
 
 from p5.completion import complete_pending_cls
 from p5.dummy_data import build_change_diffs, build_change_files, render_change
-from p5.p4 import P4Error, run_p4
+from p5.p4 import run_p4
 from p5.workspace import check_cwd_in_workspace
 
 console = Console()
@@ -40,22 +40,23 @@ def change_cmd(cl_number: str | None, do_delete: bool, dummy_data: bool) -> None
 
     if do_delete:
         if not cl_number:
-            console.print("[red]error:[/red] specify a CL number to delete")
-            return
-        try:
-            out = run_p4(["change", "-d", cl_number])
-            console.print(f"[green]{out.strip()}[/green]")
-        except P4Error as e:
-            console.print(f"[red]error:[/red] {e}")
+            raise click.UsageError("specify a CL number to delete")
+        # P4Error propagates to P5Group, which prints `error:` and exits 1.
+        out = run_p4(["change", "-d", cl_number])
+        console.print(f"[green]{out.strip()}[/green]")
         return
 
     if cl_number:
         # Edit existing CL in $EDITOR
+        import subprocess
         try:
-            import subprocess
-            subprocess.run(["p4", "change", cl_number])
+            result = subprocess.run(["p4", "change", cl_number])
         except Exception as e:
             console.print(f"[red]error:[/red] {e}")
+            raise SystemExit(1)
+        if result.returncode != 0:
+            console.print("[red]change failed[/red]")
+            raise SystemExit(1)
         return
 
     # No arguments — launch TUI for managing default changelist
@@ -66,3 +67,4 @@ def change_cmd(cl_number: str | None, do_delete: bool, dummy_data: bool) -> None
         app.run()
     except ImportError as e:
         console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")
+        raise SystemExit(1)

@@ -8,7 +8,7 @@ from rich.text import Text
 from p5 import theme
 from p5.completion import complete_opened_files, complete_pending_cls
 from p5.dummy_data import render_delete
-from p5.p4 import P4Error, run_p4
+from p5.p4 import run_p4
 from p5.workspace import any_to_rel, check_cwd_in_workspace, local_to_depot
 
 console = Console()
@@ -50,11 +50,8 @@ def delete_cmd(files: tuple[str, ...], cl: str | None, no_confirm: bool, dummy_d
         args += ["-c", cl]
     args += depot_paths
 
-    try:
-        raw = run_p4(args)
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
-        return
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    raw = run_p4(args)
 
     for line in raw.splitlines():
         if " - opened for delete" in line:

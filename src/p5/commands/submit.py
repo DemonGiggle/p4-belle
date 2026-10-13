@@ -23,8 +23,13 @@ def _show_pending(cl: str | None) -> bool:
         if cl:
             args += ["-c", cl]
         opened = run_p4_tagged(args)
-    except P4Error:
-        opened = []
+    except P4Error as e:
+        # "not opened" just means the changelist is empty; any other
+        # failure propagates to P5Group (prints `error:`, exits 1).
+        if "not opened" in str(e).lower():
+            opened = []
+        else:
+            raise
 
     if not opened:
         console.print("[dim]nothing to submit[/dim]")
@@ -79,6 +84,7 @@ def submit_cmd(cl: str | None, description: str | None, no_confirm: bool, dummy_
             app.run()
         except ImportError as e:
             console.print(f"[red]error:[/red] textual is required: pip install textual\n{e}")
+            raise SystemExit(1)
         return
 
     # Direct submit mode (with flags)
@@ -95,27 +101,26 @@ def submit_cmd(cl: str | None, description: str | None, no_confirm: bool, dummy_
         args += ["-d", description]
 
     console.print()
-    try:
-        # If no description given, let p4 open $EDITOR
-        if not description:
-            import subprocess
-            cmd = ["p4", "submit"]
-            if cl:
-                cmd += ["-c", cl]
-            result = subprocess.run(cmd, capture_output=False)
-            if result.returncode != 0:
-                console.print("[red]submit failed[/red]")
-            return
+    # If no description given, let p4 open $EDITOR
+    if not description:
+        import subprocess
+        cmd = ["p4", "submit"]
+        if cl:
+            cmd += ["-c", cl]
+        result = subprocess.run(cmd, capture_output=False)
+        if result.returncode != 0:
+            console.print("[red]submit failed[/red]")
+            raise SystemExit(1)
+        return
 
-        raw = run_p4(args)
-        # Extract submitted CL number
-        m = re.search(r"Change (\d+) submitted", raw)
-        if m:
-            console.print(
-                Text("  submitted  ", style=f"bold {theme.ADDED}") +
-                Text(f"CL {m.group(1)}", style=theme.CL_NUM)
-            )
-        else:
-            console.print(raw.strip())
-    except P4Error as e:
-        console.print(f"[red]error:[/red] {e}")
+    # P4Error propagates to P5Group, which prints `error:` and exits 1.
+    raw = run_p4(args)
+    # Extract submitted CL number
+    m = re.search(r"Change (\d+) submitted", raw)
+    if m:
+        console.print(
+            Text("  submitted  ", style=f"bold {theme.ADDED}") +
+            Text(f"CL {m.group(1)}", style=theme.CL_NUM)
+        )
+    else:
+        console.print(raw.strip())
