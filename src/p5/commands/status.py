@@ -354,8 +354,8 @@ def status_cmd(
             console.print(t)
 
     console.print()
-    hint = "  [dim]use [/dim][bold]p4 edit <file>[/bold][dim] to open for edit, "
-    hint += "[/dim][bold]p4 add <file>[/bold][dim] to mark new files, "
+    hint = "  [dim]use [/dim][bold]p5 edit <file>[/bold][dim] to open for edit, "
+    hint += "[/dim][bold]p5 add <file>[/bold][dim] to mark new files, "
     hint += "[/dim][bold]p5 delete <file>[/bold][dim] to mark for delete"
     hint += "[/dim]"
     console.print(hint)

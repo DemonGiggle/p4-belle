@@ -14,6 +14,8 @@
    - [status](#status)
    - [diff](#diff)
    - [delete](#delete)
+   - [add](#add)
+   - [edit](#edit)
    - [revert](#revert)
    - [sync](#sync)
    - [change](#change)
@@ -78,6 +80,8 @@ src/p5/
 │   ├── status.py
 │   ├── diff.py
 │   ├── delete.py
+│   ├── add.py
+│   ├── edit.py
 │   ├── revert.py
 │   ├── sync.py
 │   ├── change.py
@@ -208,10 +212,10 @@ Local changes not opened in p4:
 
 **Footer hint**: After the file list, status always prints:
 ```
-  use p4 edit <file> to open for edit, p4 add <file> to mark new files,
+  use p5 edit <file> to open for edit, p5 add <file> to mark new files,
   p5 delete <file> to mark for delete
 ```
-This is intentional — `p5 edit` and `p5 add` are not provided because they add no meaningful UX improvement over `p4 edit`/`p4 add` directly. `p5 delete` is the exception because it adds a confirmation prompt.
+Use `p5 edit` / `p5 add` to open files (see [add](#add) / [edit](#edit)); `p5 delete` adds a confirmation prompt.
 
 **Implementation**:
 - `p4 opened <depot_path>/...` → groups by changelist (scoped to current directory by default)
@@ -275,7 +279,7 @@ Mark these files for delete? [y/N]: y
   deleted  src/auth/old_helper.cpp
 ```
 
-**Rationale**: `p5 edit` and `p5 add` are intentionally absent — they wrap `p4 edit`/`p4 add` with minimal UX gain. Delete is the exception because it is irreversible enough to warrant a confirmation step.
+**Rationale**: Unlike `p5 add` / `p5 edit` (thin wrappers with relative-path input and colored output), delete warrants a confirmation step because it is destructive enough to confirm before calling `p4 delete`.
 
 **Implementation**: Resolves relative paths to depot paths, shows the list, confirms, then calls `p4 delete [-c CL] <depot_paths>`. Parses "opened for delete" lines for display; other lines shown dimmed. Failures exit non-zero (issue #10 convention: `P4Error` propagates to `P5Group` or raises `ClickException`, never silent `return`).
 
@@ -308,6 +312,56 @@ Revert these files? [y/N]: y
 ```
 
 **Implementation**: Resolves relative paths to depot paths via `local_to_depot`, shows `R`-style colored list, confirms via `click.confirm(..., abort=True)`, then calls `p4 revert [-a] [-c CL] <depot_paths>`. Parses " - reverted" lines into `reverted <rel>` lines (red, like `delete`); other lines shown dimmed. Failures raise `click.ClickException` (non-zero exit, issue #10 convention). No-args raises `click.UsageError` (exit != 0). `FILES` completes via `complete_opened_files`, `-c` via `complete_pending_cls`.
+
+---
+
+### `add`
+
+Mark new file(s) for add with relative-path input and colored output.
+
+```
+p5 add FILES... [-c CL]
+```
+
+| Option | Description |
+|---|---|
+| `FILES` | One or more new-file paths (relative or absolute) |
+| `-c CL` | Add to a specific changelist instead of default |
+
+**Output**:
+
+```
+  opened  src/auth/token.h
+```
+
+`opened` is green; other `p4 add` lines are shown dimmed.
+
+**Implementation**: Resolves paths via `local_to_depot`, calls `p4 add [-c CL] <depot_paths>`, parses "opened for add" lines to relative paths via `any_to_rel` for display.
+
+---
+
+### `edit`
+
+Open file(s) for edit with relative-path input and colored output.
+
+```
+p5 edit FILES... [-c CL]
+```
+
+| Option | Description |
+|---|---|
+| `FILES` | One or more paths (relative or absolute) |
+| `-c CL` | Open in a specific changelist instead of default |
+
+**Output**:
+
+```
+  opened  src/auth/login.cpp
+```
+
+`opened` is yellow; already-opened files show `already opened: <path>` dimmed; other `p4 edit` lines are shown dimmed.
+
+**Implementation**: Resolves paths via `local_to_depot`, calls `p4 edit [-c CL] <depot_paths>`, parses "opened for edit" / "currently opened for edit" lines to relative paths via `any_to_rel` for display.
 
 ---
 
