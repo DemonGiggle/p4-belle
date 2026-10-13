@@ -59,9 +59,11 @@ Completions supported:
 - `p5 diff [file]` — completes opened files
 - `p5 delete [file]` — completes opened files
 - `p5 revert [file]` — completes opened files
+- `p5 add [file]` — completes unopened/reconcile candidates
+- `p5 edit [file]` — completes depot/on-disk files
 - `p5 filelog [file]` — completes depot paths
 - `p5 sync [path]` — completes depot paths
-- `p5 diff -c`, `p5 delete -c`, `p5 revert -c`, `p5 submit -c`, `p5 change` — completes pending CLs
+- `p5 diff -c`, `p5 delete -c`, `p5 revert -c`, `p5 submit -c`, `p5 add -c`, `p5 edit -c`, `p5 change` — completes pending CLs
 
 ## Commands
 

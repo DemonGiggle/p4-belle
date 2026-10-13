@@ -36,8 +36,8 @@
 | **Colored by default** | Every command uses semantic color: green = added, yellow = modified, red = deleted. |
 | **Interactive TUIs** | `changes` and `ws` launch full-screen terminal UIs. All other commands are plain CLI. |
 | **Thread-safe I/O** | TUI commands run all p4 subprocess calls on background threads; the UI never blocks. |
-| **Graceful errors** | All `P4Error` exceptions are caught and printed as `[red]error:[/red] message`. Missing results show a friendly empty-state message. |
-| **Confirmation on risk** | `submit` asks for confirmation before writing to the depot (skippable with `-y`). |
+| **Graceful errors** | `P4Error` failures propagate to `P5Group` (or raise `ClickException`), printing `[red]error:[/red] message` and exiting non-zero. Best-effort fallbacks (diff rendering, workspace info, sync CL summary) show placeholder text instead. Missing results show a friendly empty-state message. |
+| **Confirmation on risk** | `submit`, `delete`, and `revert` ask for confirmation before writing or discarding depot/local state (skippable with `-y`). |
 
 ---
 
