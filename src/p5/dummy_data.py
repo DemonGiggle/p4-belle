@@ -693,7 +693,7 @@ def render_change(cl_number: str | None, do_delete: bool) -> None:
     console.print(_file_line("edit", "src/net/socket.cpp"))
     console.print(_file_line("delete", "src/legacy/old_auth.cpp"))
     console.print()
-    console.print(Text("[Enter: toggle] [space: diff] [a: all] [n: new CL] [m: move] [r: revert] [/: filter] [q: quit]", style="dim"))
+    console.print(Text("[Enter: toggle] [space: diff] [a: all] [c: new CL] [m: move] [x: revert] [r: reload] [/: filter] [?: help] [q: quit]", style="dim"))
 
 
 def render_submit(cl: str | None, description: str | None) -> None:
@@ -761,6 +761,22 @@ def render_ws() -> None:
     console.print(table)
     console.print("\n  [dim]current:[/dim] [cyan]gigo-main[/cyan]")
     console.print("  [dim]to switch:[/dim]  p5 ws  (interactive)  or  p4 set P4CLIENT=<name>")
+
+
+def render_add(files: tuple[str, ...] = ("src/auth/token_cache.cpp",)) -> None:
+    for path in files:
+        line = Text()
+        line.append("  opened  ", style=f"bold {theme.ADDED}")
+        line.append(path)
+        console.print(line)
+
+
+def render_edit(files: tuple[str, ...] = ("src/auth/login.cpp",)) -> None:
+    for path in files:
+        line = Text()
+        line.append("  opened  ", style=f"bold {theme.MODIFIED}")
+        line.append(path)
+        console.print(line)
 
 
 def render_completion(shell: str | None, install: bool) -> None:

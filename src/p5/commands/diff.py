@@ -242,14 +242,20 @@ class DiffApp(App):
     BINDINGS = [
         Binding("n", "next_file", "Next file"),
         Binding("p", "prev_file", "Prev file"),
+        Binding("enter", "next_file", "Next file", show=False),
+        Binding("space", "next_file", "Next file", show=False),
         Binding("[", "prev_tab", "Prev tab"),
         Binding("]", "next_tab", "Next tab"),
-        Binding("j", "scroll_down", "Scroll ↓", show=False),
-        Binding("k", "scroll_up", "Scroll ↑", show=False),
+        Binding("j", "scroll_down", "Scroll down", show=False),
+        Binding("k", "scroll_up", "Scroll up", show=False),
         Binding("b", "toggle_side_by_side", "View", show=False),
         Binding("w", "toggle_whitespace", "Whitespace", show=False),
-        Binding("ctrl+f", "page_down", "Page ↓", show=False),
-        Binding("ctrl+b", "page_up", "Page ↑", show=False),
+        Binding("ctrl+f", "page_down", "Page down", show=False),
+        Binding("ctrl+b", "page_up", "Page up", show=False),
+        Binding("escape", "quit", "Quit", show=False),
+        Binding("slash", "start_filter", "Filter", show=True),
+        Binding("r", "reload", "Reload", show=True),
+        Binding("question_mark", "show_help", "Help", show=True),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -272,6 +278,9 @@ class DiffApp(App):
         )
         self._ignore_whitespace = ignore_whitespace
         self._side_by_side = side_by_side
+        self._filter_text = ""
+        self._filtering = False
+        self._filter_buf = ""
 
     def compose(self) -> ComposeResult:
         yield Tabs(
@@ -285,6 +294,7 @@ class DiffApp(App):
             with Vertical(id="diff-panel"):
                 yield Static("", id="file-header")
                 yield FastRichLog(id="diff-log", highlight=False, markup=False, wrap=False)
+        yield Static("", id="filter-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -297,7 +307,11 @@ class DiffApp(App):
             self._refresh_view()
 
     def _current_files(self) -> list[FileEntry]:
-        return self.groups.get(self._active_group, [])
+        files = self.groups.get(self._active_group, [])
+        if self._filter_text:
+            needle = self._filter_text.lower()
+            files = [f for f in files if needle in f.display_name.lower()]
+        return files
 
     def _refresh_view(self) -> None:
         files = self._current_files()
@@ -307,11 +321,15 @@ class DiffApp(App):
         self._update_file_list(files)
 
         if not files:
-            header.update(Text("  (no files in this category)", style="dim"))
+            if self._filter_text:
+                header.update(Text(f"  (no files match filter '{self._filter_text}')", style="dim"))
+            else:
+                header.update(Text("  (no files in this category)", style="dim"))
             log.clear()
             return
 
-        idx = self._indices[self._active_group]
+        idx = self._indices[self._active_group] % len(files)
+        self._indices[self._active_group] = idx
         entry = files[idx]
         cache_key = (entry.depot_path, self._ignore_whitespace, self._side_by_side)
 
@@ -407,6 +425,68 @@ class DiffApp(App):
     def action_toggle_side_by_side(self) -> None:
         self._side_by_side = not self._side_by_side
         self._refresh_view()
+
+    def action_reload(self) -> None:
+        # Clear rendered-diff cache and refresh current view.
+        self._cache.clear()
+        self._refresh_view()
+
+    def action_show_help(self) -> None:
+        from p5.tui.keys import APP_HELP
+        self.notify(APP_HELP["diff"], timeout=8)
+
+    def action_start_filter(self) -> None:
+        self._filtering = True
+        self._filter_buf = ""
+        try:
+            self.query_one("#filter-bar", Static).update("[bold cyan]Filter:[/bold cyan] _")
+        except Exception:
+            pass
+
+    def _update_filter_bar(self) -> None:
+        try:
+            bar = self.query_one("#filter-bar", Static)
+        except Exception:
+            return
+        if self._filtering:
+            bar.update(f"[bold cyan]Filter:[/bold cyan] {self._filter_buf}_")
+        elif self._filter_text:
+            bar.update(f"[bold cyan]Filter:[/bold cyan] {self._filter_text}")
+        else:
+            bar.update("")
+
+    def _commit_filter(self) -> None:
+        self._filtering = False
+        self._filter_text = self._filter_buf
+        self._indices[self._active_group] = 0
+        self._update_filter_bar()
+        self._refresh_view()
+
+    def _cancel_filter(self) -> None:
+        self._filtering = False
+        self._filter_buf = ""
+        self._filter_text = ""
+        self._indices[self._active_group] = 0
+        self._update_filter_bar()
+        self._refresh_view()
+
+    def on_key(self, event) -> None:
+        if not self._filtering:
+            return
+        key = event.key
+        if key == "enter":
+            self._commit_filter()
+        elif key == "escape":
+            self._cancel_filter()
+        elif key == "backspace":
+            self._filter_buf = self._filter_buf[:-1]
+            self._update_filter_bar()
+        elif event.character and event.character.isprintable():
+            self._filter_buf += event.character
+            self._update_filter_bar()
+        else:
+            return
+        event.stop()
 
 
 # ---------------------------------------------------------------------------

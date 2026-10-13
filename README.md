@@ -205,14 +205,16 @@ p5 change
       M  src/net/socket.cpp
    ▶  A  src/ui/main.cpp
       M  src/ui/helper.h
-[Enter: toggle] [space: diff] [a: all] [n: new CL] [m: move] [r: revert] [/: filter] [q: quit]
+[Enter: toggle] [space: diff] [a: all] [c: new CL] [m: move] [x: revert] [r: reload] [/: filter] [?: help] [q: quit]
 ```
 
-Select files with `Enter`, show the highlighted file diff with `space`, toggle whitespace handling with `w`, switch between unified and side-by-side with `b`, filter with `/`, then:
-- `n` — create a new changelist with selected files (enter a description)
+Unified TUI keys: `j/k` or `n/p` move, `Enter/space` primary action, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit.
+
+Select files with `Enter`, show the highlighted file diff with `space`, toggle whitespace handling with `w`, switch between unified and side-by-side with `b`, filter with `/`, reload with `r`, then:
+- `c` — create a new changelist with selected files (enter a description)
 - `m` — move selected files to an existing pending changelist (popup picker)
 - `a` — select all visible files
-- `r` — revert the highlighted file after typing `revert` to confirm
+- `x` — revert the highlighted file after typing `revert` to confirm
 
 ```sh
 p5 change            # interactive TUI (default changelist)
@@ -224,7 +226,9 @@ p5 change -d 123456  # delete empty CL
 
 Show pending files, confirm, then submit.
 
-In changelist detail, press `space` to open the highlighted file diff, `w` to toggle whether whitespace-only changes are shown, and `b` to switch between unified and side-by-side layouts.
+Unified TUI keys: `j/k` or `n/p` move, `Enter/space` primary action, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `?` help, `q` quit.
+
+In changelist detail, press `space` to open the highlighted file diff, `w` to toggle whether whitespace-only changes are shown, and `b` to switch between unified and side-by-side layouts. In file lists `m` moves, `x` reverts (type `revert` to confirm), `u` reverts unchanged, `e` edits the description, `s` submits, and `r` reloads.
 
 ```sh
 p5 submit             # submit default changelist
@@ -248,8 +252,10 @@ Interactive workspace selector — lists all your Perforce client workspaces and
    /home/gigo/workspace/feature-x
    2026-03-20   laptop         Feature branch workspace
  ──────────────────────────────────────────────────────────
- [j/k: navigate]  [Enter: switch]  [/: filter]  [q: quit]
+ [j/k: navigate] [n/p: next/prev] [Enter/space: switch] [/: filter] [r: reload] [Esc/q: quit] [?: help]
 ```
+
+Unified TUI keys apply here too (`w`/`b` reserved — no diffs in this view).
 
 Switching runs `p4 set P4CLIENT=<name>`, which persists in `~/.p4enviro` and applies to all shells immediately.
 

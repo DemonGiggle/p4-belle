@@ -655,17 +655,19 @@ class ChangesApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("enter",  "activate",     "Open",   show=False),
-        Binding("j",      "cursor_down",  "Down",   show=False),
-        Binding("down",   "cursor_down",  "Down",   show=False),
-        Binding("k",      "cursor_up",    "Up",     show=False),
-        Binding("up",     "cursor_up",    "Up",     show=False),
-        Binding("b",      "toggle_side_by_side", "View", show=False),
-        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
-        Binding("escape", "collapse",     "Back",   show=True),
-        Binding("slash",  "start_filter", "Filter", show=True),
-        Binding("r",      "reload",       "Reload", show=True),
-        Binding("q",      "quit",         "Quit",   show=True),
+        Binding("enter", "activate", "Open", show=False),
+        Binding("space", "activate", "Open", show=False),
+        Binding("j,down,n", "cursor_down", "Down", show=False),
+        Binding("k,up,p", "cursor_up", "Up", show=False),
+        Binding("b", "toggle_side_by_side", "View", show=False),
+        Binding("w", "toggle_whitespace", "Whitespace", show=False),
+        Binding("ctrl+f", "page_down", "Page down", show=False),
+        Binding("ctrl+b", "page_up", "Page up", show=False),
+        Binding("escape", "collapse", "Back", show=True),
+        Binding("slash", "start_filter", "Filter", show=True),
+        Binding("r", "reload", "Reload", show=True),
+        Binding("question_mark", "show_help", "Help", show=True),
+        Binding("q", "quit", "Quit", show=True),
     ]
 
     detail_open: reactive[bool] = reactive(False)
@@ -852,6 +854,22 @@ class ChangesApp(App):
                 side_by_side=self._side_by_side,
             )
 
+    def action_page_down(self) -> None:
+        if self._filtering:
+            return
+        if self.detail_open:
+            self.query_one('#detail-view', DiffView).scroll_relative(y=10)
+
+    def action_page_up(self) -> None:
+        if self._filtering:
+            return
+        if self.detail_open:
+            self.query_one('#detail-view', DiffView).scroll_relative(y=-10)
+
+    def action_show_help(self) -> None:
+        from p5.tui.keys import APP_HELP
+        self.notify(APP_HELP["changes"], timeout=8)
+
     def on_resize(self) -> None:
         if self.detail_open and self._detail_rec is not None and self._detail_diff_file is not None:
             self.query_one('#detail-view', DiffView).show_file_diff(
@@ -862,7 +880,7 @@ class ChangesApp(App):
             )
 
     def on_key(self, event) -> None:
-        if self.detail_open and not self._filtering and event.key == 'enter':
+        if self.detail_open and not self._filtering and event.key in ('enter', 'space'):
             self.action_activate()
             event.stop()
             return

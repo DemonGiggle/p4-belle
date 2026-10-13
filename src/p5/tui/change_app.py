@@ -483,18 +483,23 @@ class ChangeApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("escape", "collapse",     "Back",       show=False),
-        Binding("j,down", "cursor_down",  "Down",       show=False),
-        Binding("k,up",   "cursor_up",    "Up",         show=False),
-        Binding("space",  "view_diff",    "Diff"),
-        Binding("b",      "toggle_side_by_side", "View", show=False),
-        Binding("w",      "toggle_whitespace", "Whitespace", show=False),
-        Binding("a",      "select_all",   "Select All"),
-        Binding("n",      "new_cl",       "New CL"),
-        Binding("m",      "move_to_cl",   "Move"),
-        Binding("r",      "revert_file",  "Revert"),
-        Binding("slash",  "start_filter", "Filter"),
-        Binding("q",      "quit",         "Quit"),
+        Binding("escape", "collapse", "Back", show=False),
+        Binding("j,down,n", "cursor_down", "Down", show=False),
+        Binding("k,up,p", "cursor_up", "Up", show=False),
+        Binding("enter", "select_item", "Select", show=False),
+        Binding("space", "view_diff", "Diff"),
+        Binding("b", "toggle_side_by_side", "View", show=False),
+        Binding("w", "toggle_whitespace", "Whitespace", show=False),
+        Binding("ctrl+f", "page_down", "Page down", show=False),
+        Binding("ctrl+b", "page_up", "Page up", show=False),
+        Binding("a", "select_all", "Select All"),
+        Binding("c", "new_cl", "New CL"),
+        Binding("m", "move_to_cl", "Move"),
+        Binding("x", "revert_file", "Revert"),
+        Binding("r", "reload_files", "Reload"),
+        Binding("slash", "start_filter", "Filter"),
+        Binding("question_mark", "show_help", "Help", show=True),
+        Binding("q", "quit", "Quit"),
     ]
 
     def __init__(
@@ -543,17 +548,18 @@ class ChangeApp(App):
         whitespace = "ignored" if self._ignore_whitespace else "significant"
         if self._detail_open:
             fb.update(
-                f"[dim]j/k[/dim] scroll diff  [dim]w[/dim] whitespace:{whitespace}  "
+                f"[dim]j/k[/dim] scroll diff  [dim]ctrl+f/b[/dim] page  [dim]w[/dim] whitespace:{whitespace}  "
                 f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
-                "[dim]Esc[/dim] back  [dim]q[/dim] quit"
+                "[dim]Esc[/dim] back  [dim]?[/dim] help  [dim]q[/dim] quit"
             )
             return
         fb.update(
             "[dim]Enter[/dim] toggle  [dim]space[/dim] diff  "
             f"[dim]w[/dim] whitespace:{whitespace}  [dim]a[/dim] all  "
             f"[dim]b[/dim] view:{'side-by-side' if self._side_by_side else 'unified'}  "
-            "[dim]n[/dim] new CL  [dim]m[/dim] move  [dim]r[/dim] revert  "
-            "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]q[/dim] quit"
+            "[dim]c[/dim] new CL  [dim]m[/dim] move  [dim]x[/dim] revert  "
+            "[dim]r[/dim] reload  [dim]n/p[/dim] next/prev  "
+            "[dim]/[/dim] filter  [dim]Esc[/dim] back  [dim]?[/dim] help  [dim]q[/dim] quit"
         )
 
     # ── data loading ──────────────────────────────────────────────────────
@@ -652,6 +658,9 @@ class ChangeApp(App):
         return None
 
     # ── selection actions ─────────────────────────────────────────────────
+
+    def action_select_item(self) -> None:
+        pass  # handled by ListView.Selected (Enter toggles selection)
 
     def action_toggle(self) -> None:
         if self._filtering or self._detail_open:
@@ -864,6 +873,27 @@ class ChangeApp(App):
         self._update_footer()
         if self._detail_open and self._detail_rec is not None:
             self._refresh_detail(self._detail_rec)
+
+    def action_reload_files(self) -> None:
+        if self._filtering or self._detail_open:
+            return
+        self._load_files()
+
+    def action_page_down(self) -> None:
+        if self._filtering:
+            return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=10, animate=False, immediate=True)
+
+    def action_page_up(self) -> None:
+        if self._filtering:
+            return
+        if self._detail_open:
+            self.query_one("#detail-view", FileDiffView).scroll_relative(y=-10, animate=False, immediate=True)
+
+    def action_show_help(self) -> None:
+        from p5.tui.keys import APP_HELP
+        self.notify(APP_HELP["change"], timeout=8)
 
     def on_resize(self) -> None:
         if (

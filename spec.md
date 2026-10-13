@@ -339,21 +339,30 @@ p5 change — manage default changelist
       M  src/net/socket.cpp
    ▶  A  src/ui/main.cpp
       M  src/ui/helper.h
- [Enter: toggle] [space: diff] [a: all] [n: new CL] [m: move] [r: revert] [/: filter] [q: quit]
+ [Enter: toggle] [space: diff] [a: all] [c: new CL] [m: move] [x: revert] [r: reload] [/: filter] [?: help] [q: quit]
 ```
+
+Unified TUI keys: `j/k` or `n/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit.
 
 **Keybindings**:
 
 | Key | Action |
 |---|---|
+| `Enter` | Toggle selection (also via `ListView.Selected`) |
 | `space` | Show the diff for the highlighted file |
 | `a` | Select all files (filtered) |
-| `n` | Create new CL — opens modal with description input and file preview. Files are moved via `p4 change -i` + `p4 reopen -c <new_cl>` |
+| `c` | Create new CL — opens modal with description input and file preview. Files are moved via `p4 change -i` + `p4 reopen -c <new_cl>` |
 | `m` | Move to existing CL — opens modal listing pending CLs + default. Uses `p4 reopen -c <target>` |
-| `r` | Revert the highlighted file after typing `revert` to confirm |
+| `x` | Revert the highlighted file after typing `revert` to confirm |
+| `r` | Reload files from `p4 opened -c default` |
+| `n` / `p` | Next / previous file (aliases for `j` / `k`) |
+| `w` | Toggle whitespace |
+| `b` | Toggle unified / side-by-side view |
+| `ctrl+f` / `ctrl+b` | Page down / up in diff view |
+| `?` | Show unified help |
 | `/` | Filter files by path substring |
 | `j/k` or `↑/↓` | Move cursor (skips section headers) |
-| `Enter` | Toggle selection |
+| `Esc` | Close detail / cancel filter |
 | `q` | Quit |
 
 **Modals**:
@@ -392,6 +401,8 @@ p5 submit [-c CL] [-d DESCRIPTION] [-y]
 ```
 
 **Implementation**: Regex `r"Change (\d+) submitted"` extracts the submitted CL number from p4 output.
+
+**Interactive TUI** (no flags): unified keys `j/k` or `n/p` move, `Enter/space` select / diff, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit. App-specific: `m` move, `x` revert (type `revert` to confirm), `u` revert unchanged, `e` edit desc, `s` submit.
 
 ---
 
@@ -462,19 +473,25 @@ p5 changes [-u USER] [-m MAX] [-s STATUS]
   123455  2026-03-24  alice         Add retry logic to network
   123454  2026-03-23  bob           Update third-party deps
  ────────────────────────────────────────────────────────────────
- [j/k: navigate]  [Enter: expand]  [/: filter]  [r: reload]  [q: quit]
+ [j/k: navigate] [n/p: next/prev] [Enter/space: expand] [/: filter] [r: reload] [w: whitespace] [b: view] [?: help] [q: quit]
 ```
 
 #### Keybindings
 
+Unified keys: `j/k` or `n/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit.
+
 | Key | Action |
 |---|---|
-| `j` / `↓` | Move cursor down (or scroll diff if detail open) |
-| `k` / `↑` | Move cursor up (or scroll diff if detail open) |
-| `Enter` | Expand selected CL → show files + colored diff |
+| `j` / `↓` / `n` | Move cursor down (or scroll diff if detail open) |
+| `k` / `↑` / `p` | Move cursor up (or scroll diff if detail open) |
+| `Enter` / `space` | Expand selected CL → show files + colored diff |
 | `Escape` | Close detail view / cancel filter |
 | `/` | Enter filter mode (search by CL, user, description) |
 | `r` | Reload changelist from p4 |
+| `w` | Toggle whitespace in detail diff |
+| `b` | Toggle unified / side-by-side in detail diff |
+| `ctrl+f` / `ctrl+b` | Page down / up in detail diff |
+| `?` | Show unified help |
 | `q` | Quit |
 
 #### Detail view (after pressing Enter)
@@ -565,7 +582,7 @@ p5 ws [-u USER] [--no-tui]
    /home/gigo/workspace/feature-x
    2026-03-20   laptop         Feature branch workspace
  ──────────────────────────────────────────────────────────────
- 2 workspaces  [Enter] switch  [/] filter  [r] reload  [q] quit
+ 2 workspaces  Enter+space switch  n+p next/prev  / filter  r reload  Esc+q quit  ? help
 ```
 
 Each item is 3 lines:
@@ -575,14 +592,17 @@ Each item is 3 lines:
 
 #### Keybindings
 
+Unified keys (`w`/`b` reserved here — no diffs in this view).
+
 | Key | Action |
 |---|---|
-| `j` / `↓` | Move cursor down |
-| `k` / `↑` | Move cursor up |
-| `Enter` | Switch to selected workspace |
+| `j` / `↓` / `n` | Move cursor down |
+| `k` / `↑` / `p` | Move cursor up |
+| `Enter` / `space` | Switch to selected workspace |
 | `/` | Enter filter mode |
 | `r` | Reload workspaces from p4 |
-| `q` | Quit without switching |
+| `Esc` / `q` | Quit without switching |
+| `?` | Show unified help |
 
 #### Switching behavior
 
@@ -662,6 +682,12 @@ p5 completion [SHELL] [--install]
 | `sync` | `PATH` | `complete_depot_path` |
 | `change` | `CL_NUMBER` | `complete_pending_cls` |
 | `submit` | `-c` | `complete_pending_cls` |
+| `add` | `FILES` | `complete_opened_files` |
+| `add` | `-c` | `complete_pending_cls` |
+| `edit` | `FILES` | `complete_opened_files` |
+| `edit` | `-c` | `complete_pending_cls` |
+
+**Unified TUI keys** (see `src/p5/tui/keys.py`): `j/down/n` + `k/up/p` move, `Enter/space` primary, `Esc` back, `/` filter, `r` reload, `w` whitespace, `b` view, `ctrl+f/b` page, `?` help, `q` quit. `diff` adds `[/]` tabs, `n/p` file nav, `/` filename filter. `ws` reserves `w`/`b`. All commands accept `-h` / `--help` and `--dummy-data` (including `add` / `edit`) with identical help text.
 
 ---
 
