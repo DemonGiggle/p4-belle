@@ -82,7 +82,7 @@ Other pending changelists:
 Local changes not opened in p4:
   ?  src/scratch.cpp
 
-  use p4 edit <file> to open for edit, p4 add <file> to mark new files,
+  use p5 edit <file> to open for edit, p5 add <file> to mark new files,
   p5 delete <file> to mark for delete  (p5 status -a for entire depot)
 ```
 
@@ -92,7 +92,7 @@ p5 status src/auth     # specific subdirectory
 p5 status -a           # entire depot
 ```
 
-`p5 status` intentionally does not wrap `p4 edit` or `p4 add` — those commands add little value as wrappers and are faster to type directly. `p5 delete` is the exception because it adds a confirmation prompt.
+Use `p5 edit` / `p5 add` to open files with relative paths and colored output; `p5 delete` adds a confirmation prompt.
 
 ### `p5 diff [files...]`
 
@@ -128,6 +128,26 @@ Mark these files for delete? [y/N]: y
 ```
 
 Options: `-c CL` to target a specific changelist, `-y` to skip confirmation.
+
+### `p5 add <files...>`
+
+Mark new file(s) for add — relative paths in, relative paths out.
+
+```
+  opened  src/auth/token.h
+```
+
+Options: `-c CL` to target a specific changelist.
+
+### `p5 edit <files...>`
+
+Open file(s) for edit — relative paths in, relative paths out.
+
+```
+  opened  src/auth/login.cpp
+```
+
+Already-opened files show `already opened: <path>` (dimmed). Options: `-c CL` to target a specific changelist.
 
 ### `p5 sync [path]`
 
